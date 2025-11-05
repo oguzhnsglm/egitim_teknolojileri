@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 500" style="background: #87CEEB;">
+  <defs>
+    <style>
+      .province {
+        fill: #E8DCC4;
+        stroke: #8B4513;
+        stroke-width: 1.5;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      .province:hover {
+        filter: brightness(1.2);
+      }
+    </style>
+  </defs>
+  
+  <!-- Türkiye ana hatları (basitleştirilmiş) -->
+  <path d="M50 200 L70 180 L90 175 L110 170 L130 165 L150 162 L170 160 L190 159 L210 160 L230 162 L250 165 L270 168 L290 172 L310 175 L330 178 L350 180 L370 182 L390 183 L410 183 L430 182 L450 180 L470 178 L490 177 L510 177 L530 178 L550 180 L570 183 L590 187 L610 190 L630 192 L650 193 L670 193 L690 192 L710 190 L730 189 L750 189 L770 190 L790 192 L810 195 L830 198 L850 201 L870 203 L890 204 L910 204 L930 203 L950 201 L960 200 L970 210 L975 220 L978 230 L980 245 L980 260 L978 275 L975 290 L970 305 L965 315 L955 325 L945 332 L935 338 L920 343 L900 347 L880 349 L860 350 L840 349 L820 347 L800 344 L780 341 L760 339 L740 338 L720 338 L700 339 L680 341 L660 343 L640 346 L620 349 L600 352 L580 354 L560 355 L540 355 L520 354 L500 352 L480 349 L460 346 L440 344 L420 343 L400 343 L380 344 L360 346 L340 349 L320 352 L300 355 L280 357 L260 358 L240 358 L220 357 L200 355 L180 352 L160 348 L140 343 L120 337 L100 330 L80 322 L60 313 L45 303 L35 293 L28 283 L23 273 L20 263 L18 253 L17 243 L17 233 L18 223 L20 213 L25 203 L32 195 Z" 
+        fill="#E8DCC4" stroke="#8B4513" stroke-width="2"/>
+  
+  <!-- İstanbul -->
+  <path id="TR-34" class="province" d="M385 170 l25 0 l5 15 l-5 15 l-25 0 z">
+    <title>İstanbul</title>
+  </path>
+  
+  <!-- Ankara -->
+  <path id="TR-06" class="province" d="M520 230 l35 0 l5 25 l-5 25 l-35 0 z">
+    <title>Ankara</title>
+  </path>
+  
+  <!-- İzmir -->
+  <path id="TR-35" class="province" d="M280 290 l35 0 l5 25 l-5 25 l-35 0 z">
+    <title>İzmir</title>
+  </path>
+  
+  <!-- Antalya -->
+  <path id="TR-07" class="province" d="M450 330 l35 0 l5 25 l-5 25 l-35 0 z">
+    <title>Antalya</title>
+  </path>
+  
+  <!-- Bursa -->
+  <path id="TR-16" class="province" d="M360 210 l30 0 l5 20 l-5 20 l-30 0 z">
+    <title>Bursa</title>
+  </path>
+  
+  <!-- Eskişehir -->
+  <path id="TR-26" class="province" d="M430 250 l35 0 l5 20 l-5 20 l-35 0 z">
+    <title>Eskişehir</title>
+  </path>
+  
+  <!-- Trabzon -->
+  <path id="TR-61" class="province" d="M750 150 l35 0 l5 20 l-5 20 l-35 0 z">
+    <title>Trabzon</title>
+  </path>
+  
+  <!-- Adana -->
+  <path id="TR-01" class="province" d="M620 310 l35 0 l5 25 l-5 25 l-35 0 z">
+    <title>Adana</title>
+  </path>
+  
+  <!-- Konya -->
+  <path id="TR-42" class="province" d="M540 290 l40 0 l5 30 l-5 30 l-40 0 z">
+    <title>Konya</title>
+  </path>
+  
+  <!-- Samsun -->
+  <path id="TR-55" class="province" d="M620 180 l35 0 l5 20 l-5 20 l-35 0 z">
+    <title>Samsun</title>
+  </path>
+  
+  <!-- Kayseri -->
+  <path id="TR-38" class="province" d="M640 250 l35 0 l5 25 l-5 25 l-35 0 z">
+    <title>Kayseri</title>
+  </path>
+  
+  <!-- Gaziantep -->
+  <path id="TR-27" class="province" d="M700 320 l35 0 l5 25 l-5 25 l-35 0 z">
+    <title>Gaziantep</title>
+  </path>
+  
+  <!-- Diyarbakır -->
+  <path id="TR-21" class="province" d="M790 280 l35 0 l5 25 l-5 25 l-35 0 z">
+    <title>Diyarbakır</title>
+  </path>
+  
+  <!-- Van -->
+  <path id="TR-65" class="province" d="M900 260 l35 0 l5 25 l-5 25 l-35 0 z">
+    <title>Van</title>
+  </path>
+  
+  <!-- Erzurum -->
+  <path id="TR-25" class="province" d="M850 200 l35 0 l5 25 l-5 25 l-35 0 z">
+    <title>Erzurum</title>
+  </path>
+  
+  <!-- Malatya -->
+  <path id="TR-44" class="province" d="M730 250 l35 0 l5 25 l-5 25 l-35 0 z">
+    <title>Malatya</title>
+  </path>
+  
+  <!-- Denizli -->
+  <path id="TR-20" class="province" d="M370 310 l35 0 l5 25 l-5 25 l-35 0 z">
+    <title>Denizli</title>
+  </path>
+  
+  <!-- Manisa -->
+  <path id="TR-45" class="province" d="M300 250 l35 0 l5 25 l-5 25 l-35 0 z">
+    <title>Manisa</title>
+  </path>
+  
+  <!-- Balıkesir -->
+  <path id="TR-10" class="province" d="M320 210 l35 0 l5 20 l-5 20 l-35 0 z">
+    <title>Balıkesir</title>
+  </path>
+  
+  <!-- Çanakkale -->
+  <path id="TR-17" class="province" d="M250 210 l30 0 l5 20 l-5 20 l-30 0 z">
+    <title>Çanakkale</title>
+  </path>
+  
+  <!-- Edirne -->
+  <path id="TR-22" class="province" d="M200 150 l30 0 l5 20 l-5 20 l-30 0 z">
+    <title>Edirne</title>
+  </path>
+  
+  <!-- Tekirdağ -->
+  <path id="TR-59" class="province" d="M270 170 l30 0 l5 20 l-5 20 l-30 0 z">
+    <title>Tekirdağ</title>
+  </path>
+  
+  <!-- Kırklareli -->
+  <path id="TR-39" class="province" d="M235 130 l30 0 l5 20 l-5 20 l-30 0 z">
+    <title>Kırklareli</title>
+  </path>
+</svg>

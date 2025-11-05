@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Room {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  teams     Team[]
+  cities    City[]
+  questions Question[]
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  name      String
+  color     String
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  roomId    String
+  score     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  answerLogs AnswerLog[]
+  conqueredCities City[] @relation("CityOwner")
+
+  @@index([roomId])
+}
+
+model City {
+  id           String   @id @default(cuid())
+  code         String
+  name         String
+  region       String?
+  room         Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  roomId       String
+  owner        Team?    @relation("CityOwner", fields: [ownerTeamId], references: [id])
+  ownerTeamId  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  answerLogs   AnswerLog[]
+  questions    Question[]
+
+  @@index([roomId])
+  @@unique([roomId, code])
+}
+
+model Question {
+  id           String    @id @default(cuid())
+  prompt       String
+  choices      String[]
+  correctIndex Int
+  region       String?
+  city         City?     @relation(fields: [cityId], references: [id])
+  cityId       String?
+  room         Room?     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  roomId       String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  answerLogs   AnswerLog[]
+
+  @@index([roomId])
+}
+
+model AnswerLog {
+  id            String   @id @default(cuid())
+  team          Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  teamId        String
+  question      Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionId    String
+  city          City     @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  cityId        String
+  isCorrect     Boolean  @default(false)
+  isFirstCorrect Boolean @default(false)
+  createdAt     DateTime @default(now())
+}
