@@ -8,7 +8,7 @@
       stroke-width: 1.1;
       cursor: default;
       will-change: transform, filter, stroke-width;
-      transition: fill 0.2s ease, stroke 0.2s ease, stroke-width 0.2s ease, transform 0.2s ease;
+      transition: fill 0.2s ease, stroke 0.2s ease, stroke-width 0.2s ease, transform 0.2s ease, filter 0.2s ease;
     }
     #turkey-provinces path:focus {
       outline: none;
@@ -16,10 +16,10 @@
     }
     #turkey-provinces path:hover {
       fill: #334155;
-      stroke: #facc15;
-      stroke-width: 2.4;
-      transform: translateY(-2px);
-      filter: drop-shadow(0 0 10px rgba(250,204,21,0.6));
+      stroke: #60a5fa;
+      stroke-width: 1.8;
+      transform: translateY(-1px);
+      filter: drop-shadow(0 0 8px rgba(96,165,250,0.55));
     }
   ]]></style>
   <rect class="sea" width="1000" height="600" />

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CityState } from '@/types/realtime';
 
 interface TurkeyMapProps {
@@ -14,6 +14,8 @@ const SELECTOR = '#turkey-provinces path[id^="TR-"]';
 const DEFAULT_FILL = '#1f2937';
 const BASE_STROKE = '#0f172a';
 const ACTIVE_STROKE = '#facc15';
+const HOVER_STROKE = '#60a5fa';
+const HOVER_FILTER = 'drop-shadow(0 0 8px rgba(96,165,250,0.55))';
 
 export function TurkeyMap({ cities, onSelect, disabled, activeCityCode }: TurkeyMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -26,6 +28,24 @@ export function TurkeyMap({ cities, onSelect, disabled, activeCityCode }: Turkey
     });
     return map;
   }, [cities]);
+
+  const applyBaseStyles = useCallback(
+    (path: SVGPathElement) => {
+      const code = path.id;
+      const cityInfo = cityDataByCode.get(code);
+      const baseColor = cityInfo?.ownerColor ?? DEFAULT_FILL;
+      const isActive = activeCityCode === code;
+
+      path.style.fill = isActive ? shadeColor(baseColor, -12) : baseColor;
+      path.style.stroke = isActive ? ACTIVE_STROKE : BASE_STROKE;
+      path.style.strokeWidth = isActive ? '2.2' : '1.1';
+      path.style.filter = isActive ? 'brightness(1.05)' : 'none';
+      if (!isActive) {
+        path.style.transform = 'translateY(0)';
+      }
+    },
+    [activeCityCode, cityDataByCode],
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -83,6 +103,24 @@ export function TurkeyMap({ cities, onSelect, disabled, activeCityCode }: Turkey
       }
     };
 
+    const handleMouseEnter = (event: Event) => {
+      if (disabled) return;
+      const target = event.currentTarget as SVGPathElement;
+      if (activeCityCode === target.id) {
+        target.style.transform = 'translateY(-1px)';
+        return;
+      }
+      target.style.stroke = HOVER_STROKE;
+      target.style.strokeWidth = '1.8';
+      target.style.filter = HOVER_FILTER;
+      target.style.transform = 'translateY(-1px)';
+    };
+
+    const handleMouseLeave = (event: Event) => {
+      const target = event.currentTarget as SVGPathElement;
+      applyBaseStyles(target);
+    };
+
     provincePaths.forEach((path) => {
       const cityInfo = cityDataByCode.get(path.id);
       const cityName = cityInfo?.name ?? path.id;
@@ -91,23 +129,32 @@ export function TurkeyMap({ cities, onSelect, disabled, activeCityCode }: Turkey
       path.setAttribute('aria-label', `Şehir ${cityName}`);
       path.setAttribute('tabindex', disabled ? '-1' : '0');
       path.style.cursor = disabled ? 'not-allowed' : 'default';
-      path.style.transition = 'transform 0.18s ease, filter 0.18s ease';
+      path.style.transition = 'transform 0.18s ease, filter 0.18s ease, stroke-width 0.18s ease, stroke 0.18s ease';
       path.style.outline = 'none';
       path.style.boxShadow = 'none';
 
+      applyBaseStyles(path);
+
       path.removeEventListener('click', handleClick);
       path.removeEventListener('keydown', handleKeyDown);
+      path.removeEventListener('mouseenter', handleMouseEnter);
+      path.removeEventListener('mouseleave', handleMouseLeave);
+
       path.addEventListener('click', handleClick);
       path.addEventListener('keydown', handleKeyDown);
+      path.addEventListener('mouseenter', handleMouseEnter);
+      path.addEventListener('mouseleave', handleMouseLeave);
     });
 
     return () => {
       provincePaths.forEach((path) => {
         path.removeEventListener('click', handleClick);
         path.removeEventListener('keydown', handleKeyDown);
+        path.removeEventListener('mouseenter', handleMouseEnter);
+        path.removeEventListener('mouseleave', handleMouseLeave);
       });
     };
-  }, [svgMarkup, disabled, onSelect, cityDataByCode]);
+  }, [svgMarkup, disabled, onSelect, cityDataByCode, activeCityCode, applyBaseStyles]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -115,17 +162,8 @@ export function TurkeyMap({ cities, onSelect, disabled, activeCityCode }: Turkey
 
     const provincePaths = container.querySelectorAll<SVGPathElement>(SELECTOR);
 
-    provincePaths.forEach((path) => {
-      const cityInfo = cityDataByCode.get(path.id);
-      const baseColor = cityInfo?.ownerColor ?? DEFAULT_FILL;
-      const isActive = activeCityCode === path.id;
-
-      path.style.fill = isActive ? shadeColor(baseColor, -12) : baseColor;
-      path.style.stroke = isActive ? ACTIVE_STROKE : BASE_STROKE;
-      path.style.strokeWidth = isActive ? '2.2' : '1.1';
-      path.style.filter = isActive ? 'brightness(1.05)' : 'none';
-    });
-  }, [cityDataByCode, activeCityCode]);
+    provincePaths.forEach((path) => applyBaseStyles(path));
+  }, [applyBaseStyles]);
 
   return (
     <div
