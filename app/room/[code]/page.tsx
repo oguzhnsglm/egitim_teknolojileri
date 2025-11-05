@@ -208,10 +208,10 @@ export default function RoomPage() {
 
   if (!nickname) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-100">
-        <div className="max-w-md rounded-2xl border border-slate-700 bg-slate-900/80 p-8 text-center">
-          <h1 className="text-2xl font-semibold">Devam etmek için takma adınızı girin</h1>
-          <p className="mt-2 text-sm text-slate-400">
+  <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#050915] via-[#072144] to-[#110a2e] text-white">
+        <div className="max-w-md rounded-2xl border border-white/20 bg-white/10 p-8 text-center shadow-xl shadow-black/20 backdrop-blur">
+          <h1 className="text-2xl font-semibold text-white">Devam etmek için takma adınızı girin</h1>
+          <p className="mt-2 text-sm text-slate-100/80">
             Lobiye geri dönerek kullanıcı adınızı seçebilir veya aşağıdan hızlıca belirleyebilirsiniz.
           </p>
           <NicknamePrompt onConfirm={setNickname} />
@@ -226,29 +226,29 @@ export default function RoomPage() {
   const myTeam = teams.find((team) => team.id === teamId);
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
+  <main className="min-h-screen bg-gradient-to-br from-[#050915] via-[#072144] to-[#110a2e] text-slate-100">
       <div className="mx-auto flex min-h-screen w-full max-w-[1400px] flex-col gap-6 px-4 py-8 md:px-8">
-        <header className="flex flex-col gap-2 border-b border-slate-800 pb-4 md:flex-row md:items-center md:justify-between">
+  <header className="flex flex-col gap-2 border-b border-white/20 pb-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-emerald-400">Oda</p>
+            <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Oda</p>
             <h1 className="text-2xl font-semibold text-white md:text-3xl">Kod: {roomCode}</h1>
             {myTeam && (
-              <p className="text-sm text-slate-400">
+              <p className="text-sm text-slate-100/80">
                 Takımınız: <span style={{ color: myTeam.color }}>{myTeam.name}</span> — Skor: {myTeam.score}
               </p>
             )}
           </div>
-          <div className="text-sm text-slate-400">Oyuncu: {nickname}</div>
+          <div className="text-sm text-slate-100/80">Oyuncu: {nickname}</div>
         </header>
 
         <section className="flex flex-col gap-6">
-          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6 shadow-lg">
+          <div className="rounded-3xl border border-white/20 bg-white/10 p-6 shadow-xl shadow-black/25 backdrop-blur">
             <header className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-100">Türkiye Haritası</h2>
+              <h2 className="text-lg font-semibold text-white">Türkiye Haritası</h2>
               {activeQuestion ? (
                 <Countdown expiresAt={activeQuestion.expiresAt} />
               ) : (
-                <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-400">
+                <span className="rounded-full bg-white/15 px-3 py-1 text-xs text-slate-100/80">
                   Haritadan şehir seçin
                 </span>
               )}
@@ -262,27 +262,27 @@ export default function RoomPage() {
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6 shadow-lg">
-              <h2 className="text-lg font-semibold text-slate-100">Takımlar</h2>
+            <div className="rounded-3xl border border-white/20 bg-white/10 p-6 shadow-xl shadow-black/25 backdrop-blur">
+              <h2 className="text-lg font-semibold text-white">Takımlar</h2>
               <ul className="mt-4 space-y-2">
                 {teams.map((team) => (
                   <li
                     key={team.id}
                     className={`flex items-center justify-between rounded-xl border px-3 py-2 text-sm ${
                       team.id === teamId
-                        ? 'border-emerald-400/50 bg-emerald-500/10 text-emerald-100'
-                        : 'border-slate-800 bg-slate-900/70 text-slate-200'
+                        ? 'border-emerald-300/50 bg-emerald-500/15 text-emerald-50'
+                        : 'border-white/10 bg-white/5 text-slate-100'
                     }`}
                   >
                     <div className="flex items-center gap-2">
                       <span
                         aria-hidden
-                        className="h-3 w-3 rounded-full"
+                        className="h-3 w-3 rounded-full shadow-sm shadow-black/40"
                         style={{ backgroundColor: team.color }}
                       />
-                      <span>{team.name}</span>
+                      <span className="font-medium">{team.name}</span>
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-slate-400">
+                    <div className="flex items-center gap-3 text-xs text-slate-200/80">
                       <span>Oyuncu: {team.members}</span>
                       <span>Skor: {team.score}</span>
                     </div>
@@ -291,12 +291,12 @@ export default function RoomPage() {
               </ul>
             </div>
 
-            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6 shadow-lg">
-              <h2 className="text-lg font-semibold text-slate-100">Aktif Soru</h2>
+            <div className="rounded-3xl border border-white/20 bg-white/10 p-6 shadow-xl shadow-black/25 backdrop-blur">
+              <h2 className="text-lg font-semibold text-white">Aktif Soru</h2>
               {activeQuestion ? (
                 <div className="space-y-4">
-                  <p className="text-sm text-slate-300">
-                    <span className="font-semibold text-slate-100">
+                  <p className="text-sm text-slate-100/85">
+                    <span className="font-semibold text-white">
                       {cityNameFromCode(activeQuestion.cityCode, cities)}
                     </span>{' '}
                     için sorunuz:
@@ -312,15 +312,15 @@ export default function RoomPage() {
                           ? 'danger'
                           : 'default';
                       const baseClasses =
-                        'w-full rounded-xl border px-4 py-3 text-left text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400';
-                      let stateClasses = 'border-slate-700 bg-slate-800 hover:bg-slate-700/80';
+                        'w-full rounded-xl border px-4 py-3 text-left text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70';
+                      let stateClasses = 'border-white/10 bg-white/5 hover:bg-white/10';
                       if (isSelected) {
-                        stateClasses = 'border-emerald-400 bg-emerald-500/20';
+                        stateClasses = 'border-emerald-300 bg-emerald-500/25 text-emerald-50';
                       }
                       if (variant === 'success' && isSelected) {
-                        stateClasses = 'border-emerald-500 bg-emerald-500/30 text-emerald-100';
+                        stateClasses = 'border-emerald-300 bg-emerald-500/30 text-emerald-50';
                       } else if (variant === 'danger' && isSelected) {
-                        stateClasses = 'border-rose-500 bg-rose-500/20 text-rose-200';
+                        stateClasses = 'border-rose-400 bg-rose-500/25 text-rose-100';
                       }
                       return (
                         <button
@@ -342,19 +342,19 @@ export default function RoomPage() {
                     <p
                       className={`rounded-lg px-3 py-2 text-xs ${
                         answerStatus === 'correct'
-                          ? 'bg-emerald-500/20 text-emerald-200'
+                          ? 'bg-emerald-500/25 text-emerald-50'
                           : answerStatus === 'wrong'
-                          ? 'bg-rose-500/20 text-rose-200'
-                          : 'bg-slate-800 text-slate-300'
+                          ? 'bg-rose-500/25 text-rose-100'
+                          : 'bg-white/10 text-slate-100/85'
                       }`}
                     >
                       {answerMessage}
                     </p>
                   )}
-                  <p className="text-xs text-slate-500">Klavye kısayolu: 1-4 tuşlarıyla yanıt verin.</p>
+                  <p className="text-xs text-slate-200/70">Klavye kısayolu: 1-4 tuşlarıyla yanıt verin.</p>
                 </div>
               ) : (
-                <div className="space-y-3 text-sm text-slate-300">
+                <div className="space-y-3 text-sm text-slate-100/80">
                   <p>Şehir seçmek için haritaya tıklayın. Şehir boşsa 15 saniyelik soru başlar.</p>
                   <p>Doğru cevabı ilk veren takım şehri ele geçirir ve takım rengine boyanır.</p>
                 </div>
@@ -362,17 +362,17 @@ export default function RoomPage() {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6 shadow-lg">
-            <h2 className="text-lg font-semibold text-slate-100">Olay Günlüğü</h2>
-            <ul className="mt-4 space-y-3 text-sm text-slate-300">
+          <div className="rounded-3xl border border-white/20 bg-white/10 p-6 shadow-xl shadow-black/25 backdrop-blur">
+            <h2 className="text-lg font-semibold text-white">Olay Günlüğü</h2>
+            <ul className="mt-4 space-y-3 text-sm text-slate-100/85">
               {logEntries.length === 0 && <li>Henüz olay yok. İlk şehri siz fethedin!</li>}
               {logEntries.map((entry) => (
                 <li
                   key={entry.id}
-                  className="rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-2 text-slate-200"
+                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-slate-100"
                 >
                   <p>{entry.message}</p>
-                  <span className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                  <span className="text-[10px] uppercase tracking-[0.2em] text-slate-200/70">
                     {new Date(entry.timestamp).toLocaleTimeString('tr-TR')}
                   </span>
                 </li>
@@ -413,12 +413,12 @@ function NicknamePrompt({ onConfirm }: { onConfirm: (nickname: string) => void }
         }}
         placeholder="Örn. BilgeKağan"
         maxLength={32}
-        className="w-full rounded-lg border border-slate-600 bg-slate-900 px-4 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
+        className="w-full rounded-xl border border-emerald-100 bg-white/90 px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-4 focus:ring-emerald-200/70"
       />
       {error && <p className="text-xs text-rose-400">{error}</p>}
       <button
         type="submit"
-        className="w-full rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-400"
+        className="group relative inline-flex w-full items-center justify-center overflow-hidden rounded-xl bg-gradient-to-r from-emerald-500 via-emerald-400 to-emerald-500 px-5 py-3 text-sm font-semibold text-emerald-950 shadow-md transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
       >
         Devam Et
       </button>

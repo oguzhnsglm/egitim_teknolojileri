@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { createRoomAction, validateRoomCodeAction } from './actions/room';
@@ -69,30 +70,37 @@ export default function LobbyPage() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 bg-[radial-gradient(circle_at_top,_#1f2937,_#020617)] text-slate-100">
-      <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-center gap-10 px-6 py-12">
-        <header className="space-y-4 text-center md:text-left">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-400">
-            Coğrafya & Tarih
-          </p>
-          <h1 className="text-4xl font-bold md:text-5xl">
-            Anadolu Hakimiyeti: Takım bazlı gerçek zamanlı bilgi oyunu
-          </h1>
-          <p className="text-base text-slate-300 md:max-w-2xl">
-            Türkiye haritası üzerinde şehirleri fethederken 15 saniyelik sorularla rakiplerinizi geride
-            bırakın. Misafir takma adınızla giriş yapın, oda kodu paylaşın ve ilk doğru cevabı vererek
-            şehrin hakimi olun.
-          </p>
+    <main className="min-h-screen bg-gradient-to-br from-[#050915] via-[#072144] to-[#110a2e]">
+      <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col justify-center gap-12 px-6 py-16">
+        <header className="flex flex-col gap-8 md:flex-row md:items-start md:justify-between">
+          <div className="space-y-5 text-center md:max-w-2xl md:text-left">
+            <h1 className="text-4xl font-bold text-white md:text-5xl">
+              Anadolu Hakimiyeti ile takımlar halinde Türkiye haritasını fethedin
+            </h1>
+            <p className="text-lg text-slate-100/80">
+              Demo odaya tek tuşla girin veya kodla arkadaşlarınızı davet edin.
+            </p>
+          </div>
+          <div className="flex flex-col items-center gap-3 md:flex-row">
+            <Link
+              href="/login"
+              className="group relative inline-flex min-w-[140px] items-center justify-center overflow-hidden rounded-xl border border-white/15 bg-white/10 px-5 py-3 text-sm font-semibold text-white shadow-md backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/20 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
+            >
+              <span className="transition-transform duration-300 group-hover:scale-[1.02]">Giriş Yap</span>
+            </Link>
+            <Link
+              href="/register"
+              className="group relative inline-flex min-w-[140px] items-center justify-center overflow-hidden rounded-xl bg-gradient-to-r from-[#d000ff] via-[#8a2eff] to-[#4b5dff] px-5 py-3 text-sm font-semibold text-white shadow-md transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(208,0,255,0.35)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d000ff]"
+            >
+              <span className="transition-transform duration-300 group-hover:scale-[1.02]">Kayıt Ol</span>
+            </Link>
+          </div>
         </header>
 
-        <section className="grid gap-8 rounded-2xl bg-white/5 p-8 shadow-xl backdrop-blur md:grid-cols-2">
+        <section className="grid gap-8 rounded-3xl border border-white/12 bg-slate-950/40 p-10 shadow-2xl shadow-black/40 backdrop-blur-2xl md:grid-cols-2">
           <div className="space-y-6">
-            <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-6">
-              <h2 className="text-lg font-semibold text-emerald-100">Hızlı Tek Kişilik Demo</h2>
-              <p className="mt-2 text-sm text-emerald-100/80">
-                Geliştirme sırasında doğrudan oyun ekranına geçmek için demo odayı otomatik oluşturup sizi
-                bağlar. Başlamak için tek oyuncu yeterli.
-              </p>
+            <div className="rounded-2xl border border-white/12 bg-slate-950/60 p-6 shadow-lg">
+              <h2 className="text-xl font-semibold text-white">Hızlı Tek Kişilik Demo</h2>
               <button
                 type="button"
                 onClick={() => {
@@ -113,14 +121,16 @@ export default function LobbyPage() {
                   });
                 }}
                 disabled={isPending}
-                className="mt-4 w-full rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-70"
+                className="group relative mt-6 inline-flex w-full items-center justify-center overflow-hidden rounded-xl bg-gradient-to-r from-[#d000ff] via-[#8a2eff] to-[#4b5dff] px-5 py-3 text-base font-semibold text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(208,0,255,0.35)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d000ff] disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-50"
               >
-                {isPending ? 'Yükleniyor...' : 'Demo olarak oyuna gir'}
+                <span className="transition-transform duration-300 group-hover:scale-[1.02]">
+                  {isPending ? 'Yükleniyor...' : 'Demo olarak oyuna gir'}
+                </span>
               </button>
             </div>
 
             <div>
-              <label htmlFor="nickname" className="block text-sm font-semibold text-slate-200">
+              <label htmlFor="nickname" className="block text-base font-semibold text-slate-100/90">
                 Takma adınız
               </label>
               <input
@@ -129,27 +139,28 @@ export default function LobbyPage() {
                 onChange={(event) => setNickname(event.target.value)}
                 placeholder="Örn. BilgeKağan"
                 maxLength={32}
-                className="mt-2 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-base text-slate-100 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/40"
+                className="mt-3 w-full rounded-xl border border-white/12 bg-slate-950/60 px-4 py-3 text-base text-white shadow-inner shadow-black/20 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/30"
               />
             </div>
 
-            <div className="space-y-3 rounded-xl border border-slate-700 bg-slate-900/50 p-6">
-              <h2 className="text-lg font-semibold text-slate-100">Yeni oda oluştur</h2>
-              <p className="text-sm text-slate-400">Sistem otomatik olarak 4 takımı dengeli şekilde ayarlar.</p>
+            <div className="space-y-5 rounded-2xl border border-white/12 bg-slate-950/60 p-6 shadow-lg">
+              <h2 className="text-xl font-semibold text-white">Yeni oda oluştur</h2>
               <button
                 type="button"
                 onClick={handleCreateRoom}
                 disabled={isPending}
-                className="w-full rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-70"
+                className="group relative inline-flex w-full items-center justify-center overflow-hidden rounded-xl bg-gradient-to-r from-[#d000ff] via-[#8a2eff] to-[#4b5dff] px-5 py-3 text-base font-semibold text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(208,0,255,0.35)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d000ff] disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-50"
               >
-                {isPending ? 'Oluşturuluyor...' : 'Yeni Oda Oluştur'}
+                <span className="transition-transform duration-300 group-hover:scale-[1.02]">
+                  {isPending ? 'Oluşturuluyor...' : 'Yeni Oda Oluştur'}
+                </span>
               </button>
             </div>
           </div>
 
           <div className="space-y-6">
             <div>
-              <label htmlFor="room-code" className="block text-sm font-semibold text-slate-200">
+              <label htmlFor="room-code" className="block text-base font-semibold text-slate-100/90">
                 Oda kodu
               </label>
               <input
@@ -158,35 +169,31 @@ export default function LobbyPage() {
                 onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
                 placeholder="Örn. TEST01"
                 maxLength={6}
-                className="mt-2 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-base text-slate-100 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/40"
+                className="mt-3 w-full rounded-xl border border-white/12 bg-slate-950/60 px-4 py-3 text-base text-white shadow-inner shadow-black/20 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/30"
               />
             </div>
 
-            <div className="space-y-3 rounded-xl border border-slate-700 bg-slate-900/50 p-6">
-              <h2 className="text-lg font-semibold text-slate-100">Var olan odaya katıl</h2>
-              <p className="text-sm text-slate-400">
-                Oda kodunu paylaşan ekip üyelerinizle aynı odaya bağlanın.
-              </p>
+            <div className="space-y-5 rounded-2xl border border-white/12 bg-slate-950/60 p-6 shadow-lg">
+              <h2 className="text-xl font-semibold text-white">Var olan odaya katıl</h2>
               <button
                 type="button"
                 onClick={handleJoinRoom}
                 disabled={isPending}
-                className="w-full rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                className="group relative inline-flex w-full items-center justify-center overflow-hidden rounded-xl bg-gradient-to-r from-[#d000ff] via-[#8a2eff] to-[#4b5dff] px-5 py-3 text-base font-semibold text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(208,0,255,0.35)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d000ff] disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-50"
               >
-                {isPending ? 'Katılıyorsunuz...' : 'Odaya Katıl'}
+                <span className="transition-transform duration-300 group-hover:scale-[1.02]">
+                  {isPending ? 'Katılıyorsunuz...' : 'Odaya Katıl'}
+                </span>
               </button>
-              <p className="text-xs text-slate-500">
-                Örnek: Seed verisiyle gelen demo oda kodu <span className="font-semibold text-slate-200">TEST01</span>
-              </p>
             </div>
           </div>
         </section>
 
         {(error || info) && (
           <div
-            className={`rounded-lg border px-4 py-3 text-sm font-medium ${
+            className={`rounded-xl border px-5 py-3 text-base font-medium shadow-lg ${
               error
-                ? 'border-rose-500/50 bg-rose-500/10 text-rose-100'
+                ? 'border-rose-500/40 bg-rose-500/10 text-rose-100'
                 : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100'
             }`}
           >
