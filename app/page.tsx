@@ -100,6 +100,19 @@ export default function LobbyPage() {
         <section className="grid gap-8 rounded-3xl border border-white/12 bg-slate-950/40 p-10 shadow-2xl shadow-black/40 backdrop-blur-2xl md:grid-cols-2">
           <div className="space-y-6">
             <div className="rounded-2xl border border-white/12 bg-slate-950/60 p-6 shadow-lg">
+              <h2 className="text-xl font-semibold text-white">🗺️ Harita Yönetimi</h2>
+              <p className="mt-2 text-sm text-gray-400">Haritalarınızı görüntüleyin ve yönetin</p>
+              <Link
+                href="/map-selector"
+                className="group relative mt-4 inline-flex w-full items-center justify-center overflow-hidden rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 px-5 py-3 text-base font-semibold text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(251,146,60,0.35)]"
+              >
+                <span className="transition-transform duration-300 group-hover:scale-[1.02]">
+                  📁 Haritalarım
+                </span>
+              </Link>
+            </div>
+
+            <div className="rounded-2xl border border-white/12 bg-slate-950/60 p-6 shadow-lg">
               <h2 className="text-xl font-semibold text-white">Hızlı Tek Kişilik Demo</h2>
               <button
                 type="button"

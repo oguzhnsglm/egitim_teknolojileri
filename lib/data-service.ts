@@ -59,6 +59,7 @@ export interface DataService {
   selectQuestionForCity(params: {
     roomId: UUID;
     city: CityRecord;
+    usedQuestionIds?: Set<string>;
   }): Promise<QuestionRecord | null>;
   recordAnswerLog(params: {
     teamId: UUID;
@@ -69,6 +70,7 @@ export interface DataService {
   }): Promise<void>;
   assignCityOwner(cityId: UUID, teamId: UUID): Promise<CityRecord>;
   incrementTeamScore(teamId: UUID): Promise<TeamRecord>;
+  decrementTeamScore(teamId: UUID): Promise<TeamRecord>;
 }
 
 class MemoryDataService implements DataService {
@@ -187,26 +189,47 @@ class MemoryDataService implements DataService {
   }
 
   async getCityForSelection(roomId: string, cityCode: string) {
-    const city = Array.from(this.cities.values()).find(
+    let city = Array.from(this.cities.values()).find(
       (candidate) => candidate.roomId === roomId && candidate.code === cityCode,
     );
-    if (!city) return null;
+    if (!city) {
+      const now = new Date();
+      city = {
+        id: randomUUID(),
+        code: cityCode,
+        name: cityCode,
+        region: null,
+        roomId,
+        ownerTeamId: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      this.cities.set(city.id, city);
+    }
     return { ...city, owner: city.ownerTeamId ? this.teams.get(city.ownerTeamId) ?? null : null };
   }
 
-  async selectQuestionForCity({ roomId, city }: { roomId: string; city: CityRecord }) {
+  async selectQuestionForCity({ roomId, city, usedQuestionIds }: { roomId: string; city: CityRecord; usedQuestionIds?: Set<string> }) {
     const roomQuestions = Array.from(this.questions.values()).filter((question) => question.roomId === roomId);
+    const isUsed = (q: QuestionRecord) => usedQuestionIds?.has(q.id);
 
-    const exact = roomQuestions.find((question) => question.cityId === city.id);
+    const exact = roomQuestions.find((question) => question.cityId === city.id && !isUsed(question));
     if (exact) return exact;
 
     const regional = roomQuestions.find(
-      (question) => !question.cityId && question.region && question.region === city.region,
+      (question) => !question.cityId && question.region && question.region === city.region && !isUsed(question),
     );
     if (regional) return regional;
 
-    const any = roomQuestions.find((question) => !question.cityId);
-    return any ?? null;
+    const generic = roomQuestions.find((question) => !question.cityId && !isUsed(question));
+    if (generic) return generic;
+
+    const unused = roomQuestions.filter((q) => !isUsed(q));
+    if (unused.length > 0) {
+      return unused[Math.floor(Math.random() * unused.length)];
+    }
+
+    return null;
   }
 
   async recordAnswerLog({ teamId, questionId, cityId, isCorrect, isFirstCorrect }: Parameters<DataService['recordAnswerLog']>[0]) {
@@ -238,6 +261,17 @@ class MemoryDataService implements DataService {
       throw new Error('Team not found');
     }
     team.score += 1;
+    team.updatedAt = new Date();
+    this.teams.set(teamId, team);
+    return team;
+  }
+
+  async decrementTeamScore(teamId: string) {
+    const team = this.teams.get(teamId);
+    if (!team) {
+      throw new Error('Team not found');
+    }
+    team.score = Math.max(0, team.score - 1); // Skor 0'ın altına düşmesin
     team.updatedAt = new Date();
     this.teams.set(teamId, team);
     return team;
@@ -334,27 +368,61 @@ class PrismaDataService implements DataService {
     });
   }
 
-  async selectQuestionForCity({ roomId, city }: { roomId: string; city: { id: string; region?: string | null } }) {
+  async selectQuestionForCity({
+    roomId,
+    city,
+    usedQuestionIds,
+  }: {
+    roomId: string;
+    city: CityRecord;
+    usedQuestionIds?: Set<string>;
+  }): Promise<QuestionRecord | null> {
+    const exclusion = usedQuestionIds ? { id: { notIn: Array.from(usedQuestionIds) } } : {};
+
     const exact = await this.client.question.findFirst({
-      where: { roomId, cityId: city.id },
+      where: { roomId, cityId: city.id, ...exclusion },
       orderBy: { createdAt: 'asc' },
     });
-    if (exact) return exact;
+    if (exact) {
+      return {
+        ...exact,
+        roomId: exact.roomId ?? roomId,
+        cityId: exact.cityId ?? null,
+        region: exact.region ?? null,
+      };
+    }
 
     const regional = await this.client.question.findFirst({
       where: {
         roomId,
         cityId: null,
         region: city.region ?? undefined,
+        ...exclusion,
       },
       orderBy: { createdAt: 'asc' },
     });
-    if (regional) return regional;
+    if (regional) {
+      return {
+        ...regional,
+        roomId: regional.roomId ?? roomId,
+        cityId: regional.cityId ?? null,
+        region: regional.region ?? null,
+      };
+    }
 
-    return this.client.question.findFirst({
-      where: { roomId, cityId: null },
+    const fallback = await this.client.question.findFirst({
+      where: { roomId, cityId: null, ...exclusion },
       orderBy: { createdAt: 'asc' },
     });
+    
+    if (!fallback) return null;
+    
+    return {
+      ...fallback,
+      roomId: fallback.roomId ?? roomId,
+      cityId: fallback.cityId ?? null,
+      region: fallback.region ?? null,
+    };
   }
 
   async recordAnswerLog({ teamId, questionId, cityId, isCorrect, isFirstCorrect }: Parameters<DataService['recordAnswerLog']>[0]) {
@@ -380,6 +448,16 @@ class PrismaDataService implements DataService {
     return this.client.team.update({
       where: { id: teamId },
       data: { score: { increment: 1 } },
+    });
+  }
+
+  async decrementTeamScore(teamId: string) {
+    const team = await this.client.team.findUnique({ where: { id: teamId } });
+    if (!team) throw new Error('Team not found');
+    
+    return this.client.team.update({
+      where: { id: teamId },
+      data: { score: Math.max(0, team.score - 1) },
     });
   }
 }

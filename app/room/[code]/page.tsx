@@ -197,11 +197,11 @@ export default function RoomPage() {
   }, [activeQuestion, submitAnswer]);
 
   const handleMapSelect = useCallback(
-    (cityCode: string) => {
+    (color: string) => {
       if (!teamId || activeQuestion) return;
       const socket = getSocket();
-      socket.emit('select_city', { cityCode });
-      setAnswerStatus('pending', undefined, `${cityCode} için soru çağrıldı.`);
+      socket.emit('select_color', { color });
+      setAnswerStatus('pending', undefined, `Renk seçildi, soru yükleniyor...`);
     },
     [teamId, activeQuestion, setAnswerStatus],
   );
@@ -255,7 +255,7 @@ export default function RoomPage() {
             </header>
             <TurkeyMap
               cities={cities}
-              activeCityCode={activeQuestion?.cityCode}
+              activeColor={activeQuestion?.color}
               onSelect={handleMapSelect}
               disabled={!teamId || Boolean(activeQuestion)}
             />

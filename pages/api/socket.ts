@@ -23,6 +23,7 @@ type NextApiResponseWithSocket = NextApiResponse & {
 interface ActiveQuestionState {
   cityId: string;
   cityCode: string;
+  color?: string;
   questionId: string;
   prompt: string;
   choices: string[];
@@ -43,6 +44,7 @@ interface SocketData {
 const activeQuestions = new Map<string, ActiveQuestionState>();
 const roomLogs = new Map<string, GameLogEntry[]>();
 const roomMembers = new Map<string, Map<string, Set<string>>>();
+const askedQuestions = new Map<string, Set<string>>();
 
 function ensureMemberMap(roomCode: string) {
   if (!roomMembers.has(roomCode)) {
@@ -211,6 +213,120 @@ function registerSocketHandlers(
     await broadcastRoomState(io, roomCode);
   });
 
+  socket.on('select_color', async ({ color }) => {
+    try {
+      if (!data.roomCode || !data.roomId || !data.teamId || !data.nickname) {
+        socket.emit('answer_ack', { accepted: false, reason: 'not_joined' });
+        return;
+      }
+
+      const roomCode = data.roomCode;
+      const roomId = data.roomId;
+      const current = activeQuestions.get(roomCode);
+      if (current) {
+        socket.emit('answer_ack', { accepted: false, reason: 'question_in_progress' });
+        return;
+      }
+
+      // Harita config'ini yükle
+      const fs = await import('fs');
+      const path = await import('path');
+      const indexPath = path.join(process.cwd(), 'lib', 'maps', 'index.json');
+      const indexData = fs.readFileSync(indexPath, 'utf-8');
+      const index = JSON.parse(indexData);
+      
+      const activeMap = index.maps.find((m: any) => m.id === index.activeMapId);
+      if (!activeMap) {
+        socket.emit('answer_ack', { accepted: false, reason: 'no_map_config' });
+        return;
+      }
+
+      // Bu renge ait şehirleri bul
+      const citiesForColor: string[] = [];
+      Object.values(activeMap.config.regions).forEach((region: any) => {
+        if (region.color === color) {
+          citiesForColor.push(...region.cities);
+        }
+      });
+
+      if (citiesForColor.length === 0) {
+        socket.emit('answer_ack', { accepted: false, reason: 'no_cities_for_color' });
+        return;
+      }
+
+      // Sahip olunmayan şehirleri filtrele
+      const roomState = await dataService.getRoomWithState(roomCode);
+      if (!roomState) {
+        socket.emit('answer_ack', { accepted: false, reason: 'room_not_found' });
+        return;
+      }
+
+      const availableCities = citiesForColor.filter(cityCode => {
+        const cityState = roomState.cities.find(c => c.code === cityCode);
+        return !cityState || !cityState.ownerTeamId;
+      });
+
+      if (availableCities.length === 0) {
+        socket.emit('answer_ack', { accepted: false, reason: 'all_cities_occupied' });
+        return;
+      }
+
+      const selectedCityCode = availableCities[Math.floor(Math.random() * availableCities.length)];
+      const city = await dataService.getCityForSelection(roomId, selectedCityCode);
+      if (!city) {
+        socket.emit('answer_ack', { accepted: false, reason: 'city_not_found' });
+        return;
+      }
+
+      const usedSet = askedQuestions.get(roomCode) ?? new Set<string>();
+      askedQuestions.set(roomCode, usedSet);
+
+      const question = await dataService.selectQuestionForCity({
+        roomId,
+        city,
+        usedQuestionIds: usedSet,
+      });
+
+      if (!question) {
+        socket.emit('answer_ack', { accepted: false, reason: 'no_question_available' });
+        return;
+      }
+
+      const expiresAt = Date.now() + 15_000;
+      const timeout = setTimeout(() => {
+        void handleQuestionTimeout(io, roomCode);
+      }, expiresAt - Date.now());
+
+      activeQuestions.set(roomCode, {
+        cityId: city.id,
+        cityCode: selectedCityCode,
+        questionId: question.id,
+        prompt: question.prompt,
+        choices: question.choices,
+        correctIndex: question.correctIndex,
+        expiresAt,
+        timeout,
+        answeredTeams: new Set(),
+      });
+
+      usedSet.add(question.id);
+      appendLog(roomCode, `${city.name} için soru başladı.`);
+      const questionPayload: QuestionPayload = {
+        id: question.id,
+        prompt: question.prompt,
+        choices: question.choices,
+        cityCode: selectedCityCode,
+        expiresAt,
+      };
+
+      io.to(roomCode).emit('question_started', questionPayload);
+      await broadcastRoomState(io, roomCode);
+    } catch (error) {
+      console.error('[select_color] error', error);
+      socket.emit('answer_ack', { accepted: false, reason: 'server_error' });
+    }
+  });
+
   socket.on('select_city', async ({ cityCode }) => {
     try {
       if (!data.roomCode || !data.roomId || !data.teamId || !data.nickname) {
@@ -238,7 +354,10 @@ function registerSocketHandlers(
         return;
       }
 
-      const question = await dataService.selectQuestionForCity({ roomId, city });
+      const usedSet = askedQuestions.get(roomCode) ?? new Set<string>();
+      askedQuestions.set(roomCode, usedSet);
+
+      const question = await dataService.selectQuestionForCity({ roomId, city, usedQuestionIds: usedSet });
 
       if (!question) {
         socket.emit('answer_ack', { accepted: false, reason: 'no_question_available' });
@@ -262,6 +381,7 @@ function registerSocketHandlers(
         answeredTeams: new Set(),
       });
 
+      usedSet.add(question.id);
       appendLog(roomCode, `${city.name} için soru başladı.`);
       const questionPayload: QuestionPayload = {
         id: question.id,
@@ -319,12 +439,14 @@ function registerSocketHandlers(
       });
 
       if (!isCorrect) {
-        socket.emit('answer_result', {
+        io.to(roomCode).emit('answer_result', {
           cityCode: active.cityCode,
           wasCorrect: false,
           nickname: data.nickname,
           message: 'Yanlış cevap.',
         });
+        clearRuntimeQuestion(roomCode);
+        await broadcastRoomState(io, roomCode);
         return;
       }
 
@@ -362,17 +484,6 @@ function registerSocketHandlers(
       socket.emit('answer_ack', { accepted: false, reason: 'server_error' });
     }
   });
-
-  socket.on('disconnect', async () => {
-    if (!data.roomCode || !data.teamId) {
-      return;
-    }
-    const roomCode = data.roomCode;
-    const members = ensureMemberMap(roomCode);
-    members.get(data.teamId)?.delete(socket.id);
-    appendLog(roomCode, `${data.nickname ?? 'Katılımcı'} bağlantıdan ayrıldı.`);
-    await broadcastRoomState(io, roomCode);
-  });
 }
 
 function initSocketIO(res: NextApiResponseWithSocket) {
@@ -400,4 +511,3 @@ export const config = {
     bodyParser: false,
   },
 };
-

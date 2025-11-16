@@ -20,6 +20,8 @@ export interface QuestionPayload {
   prompt: string;
   choices: string[];
   cityCode: string;
+  region?: string;
+  color?: string;
   expiresAt: number;
 }
 
@@ -41,6 +43,8 @@ export interface ClientToServerEvents {
   join_room(payload: { roomCode: string; nickname: string }): void;
   leave_room(): void;
   select_city(payload: { cityCode: string }): void;
+  select_region(payload: { regionName: string }): void;
+  select_color(payload: { color: string }): void;
   submit_answer(payload: { choiceIndex: number }): void;
 }
 
