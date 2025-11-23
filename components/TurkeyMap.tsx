@@ -2,107 +2,57 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CityState } from '@/types/realtime';
+import { PROVINCE_TO_REGION, REGION_BY_CODE, type RegionCode } from '@/lib/regions';
 
 interface TurkeyMapProps {
   cities: CityState[];
-  onSelect: (color: string) => void;
+  onSelect: (cityCode: string) => void;
   disabled?: boolean;
-  activeColor?: string;
+  activeCityCode?: string;
 }
 
 const SELECTOR = '#turkey-provinces path[id^="TR-"]';
-const DEFAULT_FILL = '#1f2937';
+const DEFAULT_FILL = '#000000';
 const BASE_STROKE = '#0f172a';
 const ACTIVE_STROKE = '#facc15';
 const HOVER_STROKE = '#60a5fa';
 const HOVER_FILTER = 'drop-shadow(0 0 8px rgba(96,165,250,0.55))';
 
-export function TurkeyMap({ cities, onSelect, disabled, activeColor }: TurkeyMapProps) {
+export function TurkeyMap({ cities, onSelect, disabled, activeCityCode }: TurkeyMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const provincePathsRef = useRef<SVGPathElement[]>([]);
+  const regionPathsRef = useRef<Map<RegionCode, SVGPathElement[]>>(new Map());
   const [svgMarkup, setSvgMarkup] = useState<string>();
-  const [hoveredColor, setHoveredColor] = useState<string | null>(null);
-  const [CITY_TO_COLOR, setCITY_TO_COLOR] = useState<Record<string, string>>({});
-  const [COLOR_REGIONS, setCOLOR_REGIONS] = useState<Record<string, { name: string; cities: string[] }>>({});
-
-  // Harita konfigürasyonunu yükle
-  useEffect(() => {
-    console.log('🗺️ Loading map config...');
-    fetch('/api/get-map-config')
-      .then(res => res.json())
-      .then(data => {
-        console.log('📦 Map config loaded:', data);
-        if (data.regions) {
-          // Her şehrin rengini bul
-          const cityToColor: Record<string, string> = {};
-          const colorRegions: Record<string, { name: string; cities: string[] }> = {};
-          
-          Object.entries(data.regions).forEach(([regionKey, regionData]: [string, any]) => {
-            const color = regionData.color;
-            console.log(`🎨 Region ${regionKey}: color=${color}, cities=${regionData.cities.length}`);
-            regionData.cities.forEach((cityCode: string) => {
-              cityToColor[cityCode] = color;
-            });
-            
-            // Aynı renkteki bölgeleri grupla
-            if (!colorRegions[color]) {
-              colorRegions[color] = { name: regionData.name, cities: [] };
-            }
-            colorRegions[color].cities.push(...regionData.cities);
-          });
-          
-          console.log('🗂️ cityToColor entries:', Object.keys(cityToColor).length);
-          console.log('🎨 Sample cities:', Object.entries(cityToColor).slice(0, 5));
-          
-          setCITY_TO_COLOR(cityToColor);
-          setCOLOR_REGIONS(colorRegions);
-          console.log('✅ Colors loaded:', Object.keys(colorRegions));
-        }
-      })
-      .catch(err => {
-        console.error('❌ Map config load error:', err);
-        setCITY_TO_COLOR({});
-        setCOLOR_REGIONS({});
-      });
-  }, []);
 
   const cityDataByCode = useMemo(() => {
-    const map = new Map<string, CityState>();
+    const map = new Map<RegionCode, CityState>();
     cities.forEach((city) => {
-      map.set(city.code, city);
+      map.set(city.code as RegionCode, city);
     });
     return map;
   }, [cities]);
 
   const applyBaseStyles = useCallback(
-    (path: SVGPathElement) => {
-      const code = path.id;
-      const color = CITY_TO_COLOR[code];
-      
-      const baseColor = color ?? DEFAULT_FILL;
-      const isActive = activeColor === color;
-      const isHovered = hoveredColor === color;
+    (regionCode?: RegionCode) => {
+      const regions = regionPathsRef.current;
+      const entries = regionCode ? [[regionCode, regions.get(regionCode) ?? []]] : Array.from(regions.entries());
+      entries.forEach(([code, paths]) => {
+        if (!paths.length) return;
+        const cityInfo = cityDataByCode.get(code);
+        const baseColor = cityInfo?.ownerColor ?? DEFAULT_FILL;
+        const isActive = activeCityCode === code;
+        const fillColor = isActive ? shadeColor(baseColor, -12) : baseColor;
 
-      if (isActive) {
-        path.style.fill = shadeColor(baseColor, 15);
-        path.style.stroke = ACTIVE_STROKE;
-        path.style.strokeWidth = '2.2';
-        path.style.filter = 'brightness(1.15)';
-        path.style.opacity = '1';
-      } else if (isHovered) {
-        path.style.fill = shadeColor(baseColor, 10);
-        path.style.stroke = HOVER_STROKE;
-        path.style.strokeWidth = '1.8';
-        path.style.filter = HOVER_FILTER;
-        path.style.opacity = '0.95';
-      } else {
-        path.style.fill = baseColor;
-        path.style.stroke = BASE_STROKE;
-        path.style.strokeWidth = '1.1';
-        path.style.filter = 'none';
-        path.style.opacity = '1';
-      }
+        paths.forEach((path) => {
+          path.style.fill = fillColor;
+          path.style.stroke = isActive ? ACTIVE_STROKE : BASE_STROKE;
+          path.style.strokeWidth = isActive ? '2.2' : '1.1';
+          path.style.filter = isActive ? 'brightness(1.05)' : 'none';
+          path.style.transform = isActive ? 'translateY(-1px)' : 'translateY(0)';
+        });
+      });
     },
-    [activeColor, hoveredColor, CITY_TO_COLOR],
+    [activeCityCode, cityDataByCode],
   );
 
   useEffect(() => {
@@ -135,93 +85,119 @@ export function TurkeyMap({ cities, onSelect, disabled, activeColor }: TurkeyMap
       svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
       svg.style.display = 'block';
     }
-  }, [svgMarkup]);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container || !svgMarkup) return;
 
     const provincePaths = Array.from(container.querySelectorAll<SVGPathElement>(SELECTOR));
+    provincePathsRef.current = provincePaths;
 
-    // Her renk için event handler'lar
-    const handleColorClick = (color: string) => {
-      console.log('🗺️ Map clicked, color:', color, 'disabled:', disabled);
+    const regions = new Map<RegionCode, SVGPathElement[]>();
+    provincePaths.forEach((path) => {
+      const regionCode = PROVINCE_TO_REGION[path.id] as RegionCode | undefined;
+      if (!regionCode) return;
+      path.dataset.regionCode = regionCode;
+      const list = regions.get(regionCode);
+      if (list) {
+        list.push(path);
+      } else {
+        regions.set(regionCode, [path]);
+      }
+    });
+    regionPathsRef.current = regions;
+    applyBaseStyles();
+  }, [svgMarkup, applyBaseStyles]);
+
+  useEffect(() => {
+    const provincePaths = provincePathsRef.current;
+    if (!provincePaths.length) return;
+
+    const getRegionCode = (target: SVGPathElement): RegionCode | undefined =>
+      (target.dataset.regionCode as RegionCode | undefined) ?? (PROVINCE_TO_REGION[target.id] as RegionCode | undefined);
+
+    const handleClick = (event: Event) => {
       if (disabled) return;
-      console.log('✅ Calling onSelect with color:', color);
-      onSelect(color);
+      const target = event.currentTarget as SVGPathElement;
+      const regionCode = getRegionCode(target);
+      if (!regionCode) return;
+      onSelect(regionCode);
     };
 
-    const handleColorMouseEnter = (color: string) => {
+    const handleKeyDown = (event: KeyboardEvent) => {
       if (disabled) return;
-      setHoveredColor(color);
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      const target = event.currentTarget as SVGPathElement;
+      const regionCode = getRegionCode(target);
+      if (!regionCode) return;
+      onSelect(regionCode);
     };
 
-    const handleColorMouseLeave = () => {
-      setHoveredColor(null);
+    const handleMouseEnter = (event: Event) => {
+      if (disabled) return;
+      const target = event.currentTarget as SVGPathElement;
+      const regionCode = getRegionCode(target);
+      if (!regionCode) return;
+      const paths = regionPathsRef.current.get(regionCode);
+      if (!paths?.length) return;
+      const isActive = activeCityCode === regionCode;
+      paths.forEach((path) => {
+        if (isActive) {
+          path.style.transform = 'translateY(-1px)';
+          return;
+        }
+        path.style.stroke = HOVER_STROKE;
+        path.style.strokeWidth = '1.8';
+        path.style.filter = HOVER_FILTER;
+        path.style.transform = 'translateY(-1px)';
+      });
+    };
+
+    const handleMouseLeave = (event: Event) => {
+      const target = event.currentTarget as SVGPathElement;
+      const regionCode = getRegionCode(target);
+      if (!regionCode) return;
+      applyBaseStyles(regionCode);
     };
 
     provincePaths.forEach((path) => {
-      const cityCode = path.id;
-      const color = CITY_TO_COLOR[cityCode];
-      
-      if (!color) {
-        // Renk atanmamış şehir - gri bırak
-        console.log('⚠️ No color for city:', cityCode);
-        path.style.fill = DEFAULT_FILL;
-        path.style.cursor = 'default';
-        return;
-      }
+      const regionCode = getRegionCode(path);
+      const cityInfo = regionCode ? cityDataByCode.get(regionCode) : undefined;
+      const regionInfo = regionCode ? REGION_BY_CODE[regionCode] : undefined;
+      const label = cityInfo?.name ?? regionInfo?.name ?? path.id;
+      const interactive = Boolean(regionCode) && !disabled;
 
-      const colorData = COLOR_REGIONS[color];
-      
-      path.setAttribute('role', 'button');
-      path.setAttribute('aria-label', colorData?.name || 'Bölge');
-      path.setAttribute('tabindex', disabled ? '-1' : '0');
-      path.style.cursor = disabled ? 'not-allowed' : 'pointer';
-      path.style.transition = 'fill 0.2s ease, stroke 0.2s ease, stroke-width 0.2s ease, opacity 0.2s ease, filter 0.2s ease';
+      path.setAttribute('role', regionCode ? 'button' : 'presentation');
+      path.setAttribute('aria-label', regionCode ? `Bolge ${label}` : path.id);
+      path.setAttribute('tabindex', interactive ? '0' : '-1');
+      path.style.cursor = interactive ? 'pointer' : 'not-allowed';
+      path.style.transition =
+        'transform 0.18s ease, filter 0.18s ease, stroke-width 0.18s ease, stroke 0.18s ease';
       path.style.outline = 'none';
+      path.style.boxShadow = 'none';
 
-      applyBaseStyles(path);
+      path.removeEventListener('click', handleClick);
+      path.removeEventListener('keydown', handleKeyDown);
+      path.removeEventListener('mouseenter', handleMouseEnter);
+      path.removeEventListener('mouseleave', handleMouseLeave);
 
-      const clickHandler = () => handleColorClick(color);
-      const enterHandler = () => handleColorMouseEnter(color);
-      const leaveHandler = handleColorMouseLeave;
-      const keyHandler = (e: KeyboardEvent) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          handleColorClick(color);
-        }
-      };
-
-      path.addEventListener('click', clickHandler);
-      path.addEventListener('mouseenter', enterHandler);
-      path.addEventListener('mouseleave', leaveHandler);
-      path.addEventListener('keydown', keyHandler as any);
-
-      // Cleanup için listener'ları path'e kaydet
-      (path as any)._regionListeners = { clickHandler, enterHandler, leaveHandler, keyHandler };
+      if (regionCode) {
+        path.addEventListener('click', handleClick);
+        path.addEventListener('keydown', handleKeyDown);
+        path.addEventListener('mouseenter', handleMouseEnter);
+        path.addEventListener('mouseleave', handleMouseLeave);
+      }
     });
 
     return () => {
       provincePaths.forEach((path) => {
-        const listeners = (path as any)._regionListeners;
-        if (listeners) {
-          path.removeEventListener('click', listeners.clickHandler);
-          path.removeEventListener('mouseenter', listeners.enterHandler);
-          path.removeEventListener('mouseleave', listeners.leaveHandler);
-          path.removeEventListener('keydown', listeners.keyHandler);
-        }
+        path.removeEventListener('click', handleClick);
+        path.removeEventListener('keydown', handleKeyDown);
+        path.removeEventListener('mouseenter', handleMouseEnter);
+        path.removeEventListener('mouseleave', handleMouseLeave);
       });
     };
-  }, [svgMarkup, disabled, onSelect, applyBaseStyles, COLOR_REGIONS, CITY_TO_COLOR]);
+  }, [disabled, onSelect, cityDataByCode, activeCityCode, applyBaseStyles, svgMarkup]);
 
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const provincePaths = container.querySelectorAll<SVGPathElement>(SELECTOR);
-
-    provincePaths.forEach((path) => applyBaseStyles(path));
+    applyBaseStyles();
   }, [applyBaseStyles]);
 
   return (
