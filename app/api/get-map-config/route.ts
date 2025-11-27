@@ -17,18 +17,20 @@ function loadIndex(): MapsIndex {
   return { maps: [], activeMapId: null };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const requestedId = searchParams.get('mapId');
+
     const index = loadIndex();
-    
-    if (index.activeMapId) {
-      const activeMap = index.maps.find(m => m.id === index.activeMapId);
-      if (activeMap) {
-        return NextResponse.json(activeMap.config);
-      }
+    let targetMap =
+      (requestedId && index.maps.find((map) => map.id === requestedId)) ||
+      (index.activeMapId && index.maps.find((map) => map.id === index.activeMapId)) ||
+      null;
+
+    if (targetMap) {
+      return NextResponse.json({ id: targetMap.id, ...targetMap.config });
     }
-    
-    // Aktif harita yoksa boş döndür
     return NextResponse.json({ regions: {} });
   } catch (error) {
     console.error('Config load error:', error);

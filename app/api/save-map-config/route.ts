@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 interface MapConfig {
+  id?: string;
   name: string;
   regions: any;
   createdAt: string;
@@ -38,20 +39,28 @@ function saveIndex(index: MapsIndex) {
 export async function POST(request: Request) {
   try {
     const data: MapConfig = await request.json();
-    
-    const mapId = Date.now().toString();
     const index = loadIndex();
-    
-    // Yeni haritayı ekle
-    index.maps.push({ id: mapId, config: data });
-    
-    // İlk harita ise aktif yap
+    const providedId = data.id;
+
+    if (providedId) {
+      const existing = index.maps.find((map) => map.id === providedId);
+      if (existing) {
+        existing.config = {
+          ...existing.config,
+          ...data,
+          createdAt: existing.config.createdAt ?? data.createdAt,
+        };
+        saveIndex(index);
+        return NextResponse.json({ success: true, mapId: providedId, updated: true });
+      }
+    }
+
+    const mapId = providedId ?? Date.now().toString();
+    index.maps.push({ id: mapId, config: { ...data, createdAt: data.createdAt } });
     if (index.maps.length === 1) {
       index.activeMapId = mapId;
     }
-    
     saveIndex(index);
-    
     return NextResponse.json({ success: true, mapId });
   } catch (error) {
     console.error('Config save error:', error);

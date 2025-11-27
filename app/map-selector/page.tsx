@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 interface SavedMap {
@@ -13,7 +12,6 @@ interface SavedMap {
 }
 
 export default function MapSelectorPage() {
-  const router = useRouter();
   const [maps, setMaps] = useState<SavedMap[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -38,11 +36,11 @@ export default function MapSelectorPage() {
       const response = await fetch('/api/set-active-map', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mapId })
+        body: JSON.stringify({ mapId }),
       });
 
       if (response.ok) {
-        alert('Harita aktif edildi! ✅');
+        alert('Harita aktif edildi!');
         loadMaps();
       } else {
         alert('Harita seçme hatası!');
@@ -57,14 +55,12 @@ export default function MapSelectorPage() {
     if (!confirm(`"${mapName}" haritasını silmek istediğinize emin misiniz?`)) {
       return;
     }
-
     try {
       const response = await fetch(`/api/delete-map?mapId=${mapId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
       });
-
       if (response.ok) {
-        alert('Harita silindi! 🗑️');
+        alert('Harita silindi!');
         loadMaps();
       } else {
         alert('Silme hatası!');
@@ -80,15 +76,12 @@ export default function MapSelectorPage() {
       <div className="max-w-5xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold mb-2">🗺️ Haritalarım</h1>
+            <h1 className="text-3xl font-bold mb-2">Haritalarım</h1>
             <p className="text-gray-400">Kayıtlı haritalarınızı yönetin</p>
           </div>
           <div className="flex gap-3">
-            <Link
-              href="/"
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition"
-            >
-              ← Ana Sayfa
+            <Link href="/" className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition">
+              Ana Sayfa
             </Link>
             <Link
               href="/map-editor"
@@ -117,18 +110,16 @@ export default function MapSelectorPage() {
               <div
                 key={map.id}
                 className={`p-6 rounded-lg border-2 transition ${
-                  map.isActive
-                    ? 'bg-green-900/20 border-green-500'
-                    : 'bg-gray-800 border-gray-700'
+                  map.isActive ? 'bg-green-900/20 border-green-500' : 'bg-gray-800 border-gray-700'
                 }`}
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       <h3 className="text-xl font-semibold">{map.name}</h3>
                       {map.isActive && (
                         <span className="px-3 py-1 bg-green-600 text-white text-xs font-semibold rounded-full">
-                          ✓ Aktif
+                          Aktif
                         </span>
                       )}
                     </div>
@@ -141,32 +132,37 @@ export default function MapSelectorPage() {
                           month: 'long',
                           year: 'numeric',
                           hour: '2-digit',
-                          minute: '2-digit'
+                          minute: '2-digit',
                         })}
                       </span>
                     </div>
                   </div>
-
                   <div className="flex items-center gap-2">
                     <Link
                       href={`/map-preview/${map.id}`}
                       className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold transition"
                     >
-                      👁️ Göster
+                      Göster
+                    </Link>
+                    <Link
+                      href={`/map-editor?mapId=${map.id}`}
+                      className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 rounded-lg font-semibold transition"
+                    >
+                      Düzenle
                     </Link>
                     {!map.isActive && (
                       <button
                         onClick={() => handleSelectMap(map.id)}
                         className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition"
                       >
-                        ✓ Aktif Yap
+                        Aktif Yap
                       </button>
                     )}
                     <button
                       onClick={() => handleDeleteMap(map.id, map.name)}
                       className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition"
                     >
-                      🗑️ Sil
+                      Sil
                     </button>
                   </div>
                 </div>

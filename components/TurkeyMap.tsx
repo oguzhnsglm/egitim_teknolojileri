@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CityState } from '@/types/realtime';
-import { PROVINCE_TO_REGION, REGION_BY_CODE, type RegionCode } from '@/lib/regions';
+import { PROVINCE_TO_REGION, REGION_BY_CODE } from '@/lib/regions';
 
 interface TurkeyMapProps {
   cities: CityState[];
   onSelect: (cityCode: string) => void;
   disabled?: boolean;
   activeCityCode?: string;
+  provinceToRegionMap?: Record<string, string>;
 }
 
 const SELECTOR = '#turkey-provinces path[id^="TR-"]';
@@ -18,35 +19,39 @@ const ACTIVE_STROKE = '#facc15';
 const HOVER_STROKE = '#60a5fa';
 const HOVER_FILTER = 'drop-shadow(0 0 8px rgba(96,165,250,0.55))';
 
-export function TurkeyMap({ cities, onSelect, disabled, activeCityCode }: TurkeyMapProps) {
+export function TurkeyMap({ cities, onSelect, disabled, activeCityCode, provinceToRegionMap = PROVINCE_TO_REGION }: TurkeyMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const provincePathsRef = useRef<SVGPathElement[]>([]);
-  const regionPathsRef = useRef<Map<RegionCode, SVGPathElement[]>>(new Map());
+  const regionPathsRef = useRef<Map<string, SVGPathElement[]>>(new Map());
   const [svgMarkup, setSvgMarkup] = useState<string>();
 
   const cityDataByCode = useMemo(() => {
-    const map = new Map<RegionCode, CityState>();
+    const map = new Map<string, CityState>();
     cities.forEach((city) => {
-      map.set(city.code as RegionCode, city);
+      map.set(city.code, city);
     });
     return map;
   }, [cities]);
 
   const applyBaseStyles = useCallback(
-    (regionCode?: RegionCode) => {
+    (regionCode?: string) => {
       const regions = regionPathsRef.current;
-      const entries = regionCode ? [[regionCode, regions.get(regionCode) ?? []]] : Array.from(regions.entries());
+      const entries: Array<[string, SVGPathElement[]]> = regionCode
+        ? [[regionCode, regions.get(regionCode) ?? []]]
+        : Array.from(regions.entries());
       entries.forEach(([code, paths]) => {
         if (!paths.length) return;
         const cityInfo = cityDataByCode.get(code);
         const baseColor = cityInfo?.ownerColor ?? DEFAULT_FILL;
         const isActive = activeCityCode === code;
-        const fillColor = isActive ? shadeColor(baseColor, -12) : baseColor;
+        const ownerFill = cityInfo?.ownerColor ?? null;
+        const fillColor = ownerFill ? ownerFill : DEFAULT_FILL;
+        const strokeColor = ownerFill ? shadeColor(ownerFill, -25) : BASE_STROKE;
 
         paths.forEach((path) => {
-          path.style.fill = fillColor;
-          path.style.stroke = isActive ? ACTIVE_STROKE : BASE_STROKE;
-          path.style.strokeWidth = isActive ? '2.2' : '1.1';
+          path.style.fill = ownerFill ? fillColor : DEFAULT_FILL;
+          path.style.stroke = isActive ? ACTIVE_STROKE : strokeColor;
+          path.style.strokeWidth = isActive ? '2.4' : ownerFill ? '1.6' : '1.1';
           path.style.filter = isActive ? 'brightness(1.05)' : 'none';
           path.style.transform = isActive ? 'translateY(-1px)' : 'translateY(0)';
         });
@@ -91,7 +96,7 @@ export function TurkeyMap({ cities, onSelect, disabled, activeCityCode }: Turkey
 
     const regions = new Map<RegionCode, SVGPathElement[]>();
     provincePaths.forEach((path) => {
-      const regionCode = PROVINCE_TO_REGION[path.id] as RegionCode | undefined;
+      const regionCode = (provinceToRegionMap[path.id] as RegionCode | string | undefined) ?? undefined;
       if (!regionCode) return;
       path.dataset.regionCode = regionCode;
       const list = regions.get(regionCode);
@@ -109,8 +114,8 @@ export function TurkeyMap({ cities, onSelect, disabled, activeCityCode }: Turkey
     const provincePaths = provincePathsRef.current;
     if (!provincePaths.length) return;
 
-    const getRegionCode = (target: SVGPathElement): RegionCode | undefined =>
-      (target.dataset.regionCode as RegionCode | undefined) ?? (PROVINCE_TO_REGION[target.id] as RegionCode | undefined);
+    const getRegionCode = (target: SVGPathElement): string | undefined =>
+      target.dataset.regionCode ?? provinceToRegionMap[target.id];
 
     const handleClick = (event: Event) => {
       if (disabled) return;
