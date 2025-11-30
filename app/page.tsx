@@ -122,8 +122,9 @@ export default function LobbyPage() {
         {CLOUDS.map((cloud, index) => (
           <div
             key={`${cloud.position}-${index}`}
-            className={`absolute ${cloud.position}`}
+            className={`absolute ${cloud.position} animate-cloud-drift`}
             style={{
+              animationDelay: `${index * 1.5}s`,
               transform: `scale(${cloud.scale}) ${cloud.flip ? 'scaleX(-1)' : 'scaleX(1)'}`,
             }}
           >
@@ -146,7 +147,7 @@ export default function LobbyPage() {
         <div className="w-full max-w-7xl rounded-[52px] border border-white/45 bg-white/15 p-18 shadow-2xl shadow-slate-700/20 backdrop-blur">
           <p className="text-sm uppercase tracking-[0.35em] text-indigo-950">Anadolu Hakimiyeti</p>
           <h1 className="mt-6 text-4xl font-bold leading-tight text-indigo-950 drop-shadow-md md:text-5xl">
-            Anadolu Hakimiyeti: Bolgeleri kazan, Turkiye'yi yesillendir.
+            Anadolu Hakimiyeti: Soruları bil, bölgeyi ele geçir.
           </h1>
           <Link
             href="/play"

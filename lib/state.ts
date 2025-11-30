@@ -16,6 +16,8 @@ export interface LocalPlayer {
 
 type GameStore = {
   players: LocalPlayer[];
+  initialPlayers: LocalPlayer[];
+  eliminatedPlayers: LocalPlayer[];
   activePlayerIndex: number;
   baseCities: CityState[];
   cities: CityState[];
@@ -86,6 +88,8 @@ function clampIndex(index: number, length: number) {
 
 export const useGameStore = create<GameStore>((set) => ({
   players: DEFAULT_PLAYERS,
+  initialPlayers: DEFAULT_PLAYERS,
+  eliminatedPlayers: [],
   activePlayerIndex: 0,
   baseCities: cloneDefaultCities(),
   cities: cloneDefaultCities(),
@@ -117,17 +121,19 @@ export const useGameStore = create<GameStore>((set) => ({
       if (state.players.length >= MAX_PLAYERS) {
         return state;
       }
+      const nextPlayers = [
+        ...state.players,
+        {
+          id: `P${Date.now()}`,
+          name: name || `Oyuncu ${state.players.length + 1}`,
+          color,
+          score: 0,
+          lastAnswerDuration: undefined,
+        },
+      ];
       return {
-        players: [
-          ...state.players,
-          {
-            id: `P${Date.now()}`,
-            name: name || `Oyuncu ${state.players.length + 1}`,
-            color,
-            score: 0,
-            lastAnswerDuration: undefined,
-          },
-        ],
+        players: nextPlayers,
+        initialPlayers: nextPlayers,
         roundPlayerCount: state.players.length + 1,
       };
     }),
@@ -135,14 +141,17 @@ export const useGameStore = create<GameStore>((set) => ({
   updatePlayer: (id, updates) =>
     set((state) => ({
       players: state.players.map((player) => (player.id === id ? { ...player, ...updates } : player)),
+      initialPlayers: state.initialPlayers.map((player) => (player.id === id ? { ...player, ...updates } : player)),
     })),
 
   removePlayer: (id) =>
     set((state) => {
       const players = state.players.filter((player) => player.id !== id);
+      const initialPlayers = state.initialPlayers.filter((player) => player.id !== id);
       const activePlayerIndex = clampIndex(state.activePlayerIndex, players.length);
       return {
         players,
+        initialPlayers,
         activePlayerIndex,
         roundPlayerCount: players.length,
         roundTurns: Math.min(state.roundTurns, players.length),
@@ -203,6 +212,7 @@ export const useGameStore = create<GameStore>((set) => ({
       let contestCityCode = state.contestCityCode;
       let pendingCityCode = state.pendingCityCode;
       let pendingContestCityCode = state.pendingContestCityCode;
+      let eliminatedPlayers = state.eliminatedPlayers;
 
       if (currentRoundTarget > 0 && roundTurns >= currentRoundTarget) {
         roundsPlayed += 1;
@@ -216,6 +226,7 @@ export const useGameStore = create<GameStore>((set) => ({
               const eliminatedPlayer = pickEliminationCandidate(players, cityCounts);
               if (!eliminatedPlayer) break;
               players = players.filter((candidate) => candidate.id !== eliminatedPlayer.id);
+              eliminatedPlayers = [...eliminatedPlayers, eliminatedPlayer];
               lastEliminatedPlayerName = eliminatedPlayer.name;
               lastEliminatedCityCode = state.pendingCityCode;
               if (players.length) {
@@ -246,12 +257,17 @@ export const useGameStore = create<GameStore>((set) => ({
             );
           }
         }
+        const combinedPlayers = [...players, ...eliminatedPlayers];
+        const orderedSource = state.initialPlayers.length ? state.initialPlayers : combinedPlayers;
+        players = orderedSource.map((initial) => combinedPlayers.find((player) => player.id === initial.id) ?? initial);
+        eliminatedPlayers = [];
         contestCityCode = undefined;
         roundTurns = 0;
         roundsPlayed = 0;
         roundPlayerCount = schedule[0] ?? players.length;
         pendingCityCode = undefined;
         pendingContestCityCode = undefined;
+        activeIndex = 0;
       } else {
         pendingContestCityCode = contestCityCode ?? pendingContestCityCode;
       }
@@ -272,6 +288,7 @@ export const useGameStore = create<GameStore>((set) => ({
         lastEliminatedCityCode,
         contestCityCode,
         pendingContestCityCode,
+        eliminatedPlayers,
       };
     });
     return wasCorrect;
@@ -295,6 +312,8 @@ export const useGameStore = create<GameStore>((set) => ({
       const schedule = ROUND_PLAYER_SCHEDULE[gameLength] ?? [];
       return {
         players: preparedPlayers,
+        initialPlayers: preparedPlayers,
+        eliminatedPlayers: [],
         activePlayerIndex: 0,
         cities: cloneDefaultCities(),
         lastSelectedCityCode: undefined,
@@ -325,6 +344,7 @@ export const useGameStore = create<GameStore>((set) => ({
         ownerTeamId: null,
         ownerColor: null,
       }));
+      const resetPlayers = state.players.map((player) => ({ ...player, score: 0 }));
       return {
         baseCities: normalized,
         cities: normalized,
@@ -338,7 +358,9 @@ export const useGameStore = create<GameStore>((set) => ({
         roundsPlayed: 0,
         roundTurns: 0,
         roundPlayerCount: normalized.length ? Math.min(normalized.length, schedule[0] ?? normalized.length) : 0,
-        players: state.players.map((player) => ({ ...player, score: 0 })),
+        players: resetPlayers,
+        initialPlayers: resetPlayers,
+        eliminatedPlayers: [],
         activePlayerIndex: 0,
       };
     }),
@@ -346,6 +368,8 @@ export const useGameStore = create<GameStore>((set) => ({
   reset: () =>
     set((state) => ({
       players: DEFAULT_PLAYERS,
+      initialPlayers: DEFAULT_PLAYERS,
+      eliminatedPlayers: [],
       activePlayerIndex: 0,
       cities: state.baseCities.map((city) => ({ ...city, ownerTeamId: null, ownerColor: null })),
       lastSelectedCityCode: undefined,

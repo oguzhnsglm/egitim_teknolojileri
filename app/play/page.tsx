@@ -1,18 +1,25 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import TurkeyMap from '@/components/TurkeyMap';
 import { useGameStore, type GameLengthId } from '@/lib/state';
 import { TEAM_PRESETS } from '@/lib/fixtures';
-import { PROVINCE_TO_REGION } from '@/lib/regions';
+import { PROVINCE_TO_REGION, REGION_BY_CODE, type RegionCode } from '@/lib/regions';
 
 const FALLBACK_COLORS = TEAM_PRESETS.map((team) => team.color);
+const REQUIRED_PLAYER_COUNT = 4;
+const SUBJECT_OPTIONS = [
+  { id: 'math', label: 'Matematik' },
+  { id: 'turkish', label: 'Türkçe' },
+  { id: 'history', label: 'Tarih' },
+  { id: 'culture', label: 'Genel Kültür' },
+  { id: 'geography', label: 'Coğrafya' },
+] as const;
 const GAME_LENGTH_OPTIONS = [
   { id: 'short', label: 'Kısa', description: '3 round', rounds: 3 },
   { id: 'normal', label: 'Normal', description: '5 round', rounds: 5 },
   { id: 'long', label: 'Uzun', description: '7 round', rounds: 7 },
 ] as const;
-const REQUIRED_PLAYER_COUNT = 4;
 
 const createDefaultNames = (count: number) => Array.from({ length: count }, (_, index) => `Oyuncu ${index + 1}`);
 const CUSTOM_COLORS = [
@@ -40,6 +47,7 @@ export default function PlayPage() {
   const currentQuestion = useGameStore((state) => state.currentQuestion);
   const lastAnswerCorrect = useGameStore((state) => state.lastAnswerCorrect);
   const roundsPlayed = useGameStore((state) => state.roundsPlayed);
+  const roundTurns = useGameStore((state) => state.roundTurns);
   const gameRoundTarget = useGameStore((state) => state.gameRoundTarget);
   const storedGameLength = useGameStore((state) => state.gameLength);
   const lastEliminatedPlayerName = useGameStore((state) => state.lastEliminatedPlayerName);
@@ -60,17 +68,35 @@ export default function PlayPage() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [playerNames, setPlayerNames] = useState<string[]>(() => createDefaultNames(REQUIRED_PLAYER_COUNT));
   const [playerColors, setPlayerColors] = useState<string[]>(() => createDefaultColors(REQUIRED_PLAYER_COUNT));
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [selectedGameLength, setSelectedGameLength] = useState<GameLengthId>('normal');
   const [questionTimer, setQuestionTimer] = useState<number | null>(null);
   const questionStartRef = useRef<number | null>(null);
+  const regionTieSpinTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const regionTieResolveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [openColorPickerIndex, setOpenColorPickerIndex] = useState<number | null>(null);
   const [provinceMap, setProvinceMap] = useState<Record<string, string>>(PROVINCE_TO_REGION);
+  const [isRegionVoteActive, setIsRegionVoteActive] = useState(false);
+  const [playerRegionVotes, setPlayerRegionVotes] = useState<Record<string, string | null>>({});
+  const [activeRegionVoterId, setActiveRegionVoterId] = useState<string | null>(null);
+  const [regionVoteResult, setRegionVoteResult] = useState<string | null>(null);
+  const [regionVoteCompleted, setRegionVoteCompleted] = useState(false);
+  const [regionVoteTieCandidates, setRegionVoteTieCandidates] = useState<string[]>([]);
+  const [isRegionTieSpinning, setIsRegionTieSpinning] = useState(false);
+  const [regionTieWinner, setRegionTieWinner] = useState<string | null>(null);
+  const [showRegionResultModal, setShowRegionResultModal] = useState(false);
+  const lastModalCityRef = useRef<string | null>(null);
+  const shouldShowRegionVoteOverlay = isRegionVoteActive && !pendingContestCity && !contestCityCode && !currentQuestion;
 
-  const setupGameLengthMeta = GAME_LENGTH_OPTIONS.find((option) => option.id === selectedGameLength);
+  const setupGameLengthMeta = GAME_LENGTH_OPTIONS.find((option) =>
+    isSetupComplete ? option.id === storedGameLength : option.id === selectedGameLength,
+  );
   const runningGameLengthMeta = GAME_LENGTH_OPTIONS.find((option) => option.id === storedGameLength);
   const visibleGameLengthMeta = isSetupComplete ? runningGameLengthMeta : setupGameLengthMeta;
 
   const allPlayerNamesReady = playerNames.every((name) => name.trim().length > 0);
+  const selectedSubjectLabels = SUBJECT_OPTIONS.filter((option) => selectedSubjects.includes(option.id)).map((option) => option.label);
+  const canStartGame = allPlayerNamesReady && selectedSubjects.length > 0;
 
   const lastEliminatedCityName = useMemo(() => {
     if (!lastEliminatedCityCode) return null;
@@ -86,14 +112,30 @@ export default function PlayPage() {
     if (!pendingContestCity) return null;
     return cities.find((city) => city.code === pendingContestCity) ?? null;
   }, [cities, pendingContestCity]);
+  const cityNameByCode = useMemo(() => {
+    const map: Record<string, string> = {};
+    cities.forEach((city) => {
+      map[city.code] = city.name ?? city.region ?? city.code;
+    });
+    return map;
+  }, [cities]);
 
-  const handleSelectCity = (cityCode: string) => {
-    if (!activePlayer || !isSetupComplete || currentQuestion || showStartInfo) return;
-    if (contestCityCode) return;
-    if (pendingContestCity) return;
-    setPendingContestCity(cityCode);
-    setFeedback(null);
-  };
+  const selectedVoteCity = useMemo(() => {
+    if (!regionVoteResult) return null;
+    return cities.find((city) => city.code === regionVoteResult) ?? null;
+  }, [cities, regionVoteResult]);
+
+  const getRegionDisplayName = useCallback(
+    (code?: string | null) => {
+      if (!code) return null;
+      return cityNameByCode[code] ?? REGION_BY_CODE[code as RegionCode]?.name ?? null;
+    },
+    [cityNameByCode],
+  );
+
+  const targetCityName = targetCity?.name ?? getRegionDisplayName(contestCityCode);
+  const pendingTargetCityName = pendingTargetCity?.name ?? getRegionDisplayName(pendingContestCity);
+  const selectedVoteCityName = selectedVoteCity?.name ?? getRegionDisplayName(regionVoteResult);
 
   const handlePlayerNameChange = (index: number, value: string) => {
     setPlayerNames((prev) => prev.map((name, idx) => (idx === index ? value : name)));
@@ -104,15 +146,19 @@ export default function PlayPage() {
     setOpenColorPickerIndex(null);
   };
 
+  const handleSubjectToggle = (subjectId: string) => {
+    setSelectedSubjects((prev) => (prev.includes(subjectId) ? prev.filter((id) => id !== subjectId) : [...prev, subjectId]));
+  };
   const handleBeginGame = () => {
-    if (!allPlayerNamesReady || !setupGameLengthMeta) return;
+    if (!allPlayerNamesReady || !selectedSubjects.length) return;
+    const gameLengthMeta = setupGameLengthMeta ?? GAME_LENGTH_OPTIONS.find((option) => option.id === 'normal')!;
     const preparedPlayers = playerNames.map((name, index) => ({
       id: `P${Date.now()}-${index}`,
       name: name.trim(),
       color: playerColors[index] ?? FALLBACK_COLORS[index % FALLBACK_COLORS.length] ?? '#f97316',
       score: 0,
     }));
-    initializeGame(preparedPlayers, selectedGameLength, setupGameLengthMeta.rounds);
+    initializeGame(preparedPlayers, storedGameLength, gameLengthMeta.rounds);
     setIsSetupComplete(true);
     setFeedback(null);
     setShowStartInfo(true);
@@ -186,6 +232,200 @@ export default function PlayPage() {
       });
   }, [loadMapCities]);
 
+  useEffect(() => {
+    if (!isSetupComplete) {
+      setIsRegionVoteActive(false);
+      setRegionVoteCompleted(false);
+      setRegionVoteResult(null);
+      setRegionVoteTieCandidates([]);
+      setRegionTieWinner(null);
+      setPlayerRegionVotes({});
+      setActiveRegionVoterId(null);
+      return;
+    }
+    setPlayerRegionVotes(() => {
+      const initial: Record<string, string | null> = {};
+      players.forEach((player) => {
+        initial[player.id] = null;
+      });
+      return initial;
+    });
+  }, [isSetupComplete, players]);
+
+  useEffect(() => {
+    if (!players.length) {
+      setActiveRegionVoterId(null);
+      return;
+    }
+    setActiveRegionVoterId((current) => {
+      if (current && players.some((player) => player.id === current)) {
+        return current;
+      }
+      return players[0]?.id ?? null;
+    });
+  }, [players]);
+
+  useEffect(() => {
+    if (isSetupComplete && !showStartInfo && !regionVoteCompleted && roundTurns === 0) {
+      setIsRegionVoteActive(true);
+    }
+  }, [isSetupComplete, showStartInfo, regionVoteCompleted, roundTurns]);
+
+  useEffect(() => {
+    return () => {
+      if (regionTieSpinTimeoutRef.current) {
+        clearTimeout(regionTieSpinTimeoutRef.current);
+      }
+      if (regionTieResolveTimeoutRef.current) {
+        clearTimeout(regionTieResolveTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const regionVoteSummary = useMemo(() => {
+    const votesPlaced = players.reduce((count, player) => count + (playerRegionVotes[player.id] ? 1 : 0), 0);
+    const totalVotes = players.length;
+    const allVoted = Boolean(totalVotes) && votesPlaced === totalVotes;
+    const tallies = new Map<string, number>();
+    players.forEach((player) => {
+      const vote = playerRegionVotes[player.id];
+      if (vote) {
+        tallies.set(vote, (tallies.get(vote) ?? 0) + 1);
+      }
+    });
+    let maxVotes = 0;
+    const topCities: string[] = [];
+    tallies.forEach((count, cityCode) => {
+      if (count > maxVotes) {
+        maxVotes = count;
+        topCities.length = 0;
+        topCities.push(cityCode);
+      } else if (count === maxVotes) {
+        topCities.push(cityCode);
+      }
+    });
+    return { votesPlaced, allVoted, topCities };
+  }, [players, playerRegionVotes]);
+
+  const handleRegionCardSelect = useCallback(
+    (cityCode: string) => {
+      if (!activeRegionVoterId || regionVoteSummary.allVoted) return;
+      setPlayerRegionVotes((prev) => {
+        const currentChoice = prev[activeRegionVoterId];
+        const nextChoice = currentChoice === cityCode ? null : cityCode;
+        const next = { ...prev, [activeRegionVoterId]: nextChoice };
+        if (nextChoice) {
+          const pendingPlayer = players.find((player) => !next[player.id]);
+          if (pendingPlayer && pendingPlayer.id !== activeRegionVoterId) {
+            setActiveRegionVoterId(pendingPlayer.id);
+          }
+        }
+        return next;
+      });
+    },
+    [activeRegionVoterId, players, regionVoteSummary.allVoted],
+  );
+
+  const handleSelectCity = (cityCode: string) => {
+    if (!shouldShowRegionVoteOverlay) return;
+    if (isRegionVoteActive && !regionVoteCompleted) {
+      handleRegionCardSelect(cityCode);
+      return;
+    }
+    if (!activePlayer || !isSetupComplete || currentQuestion || showStartInfo) return;
+    if (contestCityCode) return;
+    if (pendingContestCity) return;
+    setPendingContestCity(cityCode);
+    setFeedback(null);
+    setShowRegionResultModal(true);
+  };
+
+  const finalizeRegionVote = useCallback(
+    (winningCityCode: string) => {
+      setRegionVoteResult(winningCityCode);
+      setRegionVoteCompleted(true);
+      setIsRegionVoteActive(false);
+      setRegionVoteTieCandidates([]);
+      setRegionTieWinner(null);
+      setPendingContestCity(winningCityCode);
+      setFeedback(null);
+      setShowRegionResultModal(true);
+    },
+    [setPendingContestCity, setFeedback],
+  );
+
+  useEffect(() => {
+    if (!isRegionVoteActive) return;
+    if (!regionVoteSummary.allVoted) return;
+    if (!regionVoteSummary.topCities.length) return;
+    if (regionVoteSummary.topCities.length === 1) {
+      finalizeRegionVote(regionVoteSummary.topCities[0]);
+      return;
+    }
+    if (regionVoteTieCandidates.length) return;
+    setRegionVoteTieCandidates(regionVoteSummary.topCities);
+    setIsRegionTieSpinning(true);
+    if (regionTieSpinTimeoutRef.current) {
+      clearTimeout(regionTieSpinTimeoutRef.current);
+    }
+    if (regionTieResolveTimeoutRef.current) {
+      clearTimeout(regionTieResolveTimeoutRef.current);
+    }
+    regionTieSpinTimeoutRef.current = setTimeout(() => {
+      const winner =
+        regionVoteSummary.topCities[Math.floor(Math.random() * regionVoteSummary.topCities.length)];
+      setRegionTieWinner(winner);
+      setIsRegionTieSpinning(false);
+      regionTieResolveTimeoutRef.current = setTimeout(() => {
+        finalizeRegionVote(winner);
+      }, 1500);
+    }, 2000);
+  }, [
+    finalizeRegionVote,
+    isRegionVoteActive,
+    regionVoteSummary.allVoted,
+    regionVoteSummary.topCities,
+    regionVoteTieCandidates.length,
+  ]);
+
+  useEffect(() => {
+    if (!isSetupComplete) return;
+    if (!regionVoteCompleted) return;
+    if (isRegionVoteActive) return;
+    if (pendingContestCity || contestCityCode || currentQuestion) return;
+    if (roundTurns !== 0) return;
+    setRegionVoteCompleted(false);
+    setRegionVoteResult(null);
+    setPlayerRegionVotes(() => {
+      const initial: Record<string, string | null> = {};
+      players.forEach((player) => {
+        initial[player.id] = null;
+      });
+      return initial;
+    });
+    setActiveRegionVoterId(players[0]?.id ?? null);
+  }, [
+    contestCityCode,
+    currentQuestion,
+    isRegionVoteActive,
+    isSetupComplete,
+    pendingContestCity,
+    players,
+    regionVoteCompleted,
+    roundTurns,
+  ]);
+
+  useEffect(() => {
+    const activeCityCode = pendingContestCity ?? regionVoteResult ?? null;
+    if (activeCityCode && activeCityCode !== lastModalCityRef.current && !currentQuestion) {
+      setShowRegionResultModal(true);
+      lastModalCityRef.current = activeCityCode;
+    }
+    if (!activeCityCode) {
+      setShowRegionResultModal(false);
+    }
+  }, [pendingContestCity, regionVoteResult, currentQuestion]);
+
   return (
     <main className="relative min-h-screen bg-gradient-to-b from-[#031633] via-[#044d81] to-[#0c7ec0] pb-6 text-white">
       <div className="pointer-events-none absolute left-6 top-4 z-50">
@@ -196,7 +436,11 @@ export default function PlayPage() {
           Haritalarım
         </a>
       </div>
-      <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-8 px-6 py-4">
+      <div
+        className={`mx-auto flex w-full flex-col gap-8 px-6 py-4 ${
+          isSetupComplete ? 'max-w-[1500px]' : 'max-w-[1100px]'
+        }`}
+      >
         {!isSetupComplete && (
           <header className="flex flex-col gap-4 text-center">
             <p className="text-sm uppercase tracking-[0.4em] text-white/70">Yerel Oyun Modu</p>
@@ -217,17 +461,82 @@ export default function PlayPage() {
                 cities={cities}
                 onSelect={handleSelectCity}
                 activeCityCode={lastSelectedCityCode}
-                disabled={!players.length || Boolean(currentQuestion) || showStartInfo}
+                disabled={!players.length || Boolean(currentQuestion) || showStartInfo || !shouldShowRegionVoteOverlay}
                 provinceToRegionMap={provinceMap}
               />
             </div>
-            <div className="pointer-events-none absolute left-1/2 top-6 z-20 -translate-x-1/2 rounded-3xl border border-white/20 bg-[#041633]/95 px-6 py-3 text-base font-semibold text-white/90 shadow-lg">
-              {targetCity
-                ? `Hedef Bölge: ${targetCity.name}`
-                : pendingTargetCity
-                  ? `Hedef Seçildi: ${pendingTargetCity.name}`
-                  : 'Haritadan bir hedef seçin'}
+            <div className="pointer-events-none absolute left-1/2 top-5 z-20 -translate-x-1/2 rounded-2xl border border-white/15 bg-[#041633]/90 px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-white/80 shadow-lg">
+              {targetCityName
+                ? `Hedef Bölge: ${targetCityName}`
+                : pendingTargetCityName
+                  ? `Hedef Seçildi: ${pendingTargetCityName}`
+                  : selectedVoteCityName
+                    ? `Seçilen Bölge: ${selectedVoteCityName}`
+                    : 'Henüz bir bölge seçilmedi'}
             </div>
+            {shouldShowRegionVoteOverlay && (
+              <>
+                <div className="pointer-events-none absolute inset-0 z-30 bg-[#010a1b]/60" />
+                <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center px-4">
+                  <div className="pointer-events-auto w-full max-w-md rounded-3xl border border-white/20 bg-[#050d1f]/70 px-6 py-6 text-white shadow-[0_30px_90px_rgba(0,0,0,0.45)]">
+                    <div className="text-center text-[11px] uppercase tracking-[0.4em] text-white/60">Bölge Seçimi</div>
+                    <h3 className="mt-3 text-2xl font-semibold text-white">Bölge Seçin</h3>
+                    <p className="mt-2 text-xs text-white/70">
+                      Haritada bir bölgeye tıklayarak oyuncular oy veriyor. Her oy sonrası sıra otomatik ilerler.
+                    </p>
+                    <div className="mt-3 text-center text-[10px] uppercase tracking-[0.4em] text-white/55">
+                      {regionVoteSummary.votesPlaced}/{players.length} oy verildi
+                    </div>
+                    <ul className="mt-4 space-y-2 text-sm text-white/80">
+                      {players.map((player) => {
+                        const vote = playerRegionVotes[player.id];
+                        const isActive = activeRegionVoterId === player.id;
+                        return (
+                          <li
+                            key={player.id}
+                            className={`flex items-center justify-between rounded-2xl border px-3 py-2 ${
+                              isActive ? 'border-white/60 bg-white/10' : 'border-white/15 bg-white/5'
+                            }`}
+                          >
+                            <span className="flex items-center gap-2">
+                              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: player.color }} />
+                              {player.name}
+                            </span>
+                            <span className="text-[11px] uppercase tracking-[0.3em] text-white/60">
+                              {vote ? getRegionDisplayName(vote) ?? 'Seçildi' : 'Bekleniyor'}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    {regionVoteTieCandidates.length > 1 && (
+                      <div className="mt-4 rounded-2xl border border-white/20 bg-black/20 p-3 text-center text-xs">
+                        <p>Oylar eşit! Çark karar veriyor.</p>
+                        <div className="relative mx-auto mt-3 h-20 w-20">
+                          <div
+                            className={`absolute inset-0 rounded-full border-4 border-white/25 bg-[conic-gradient(#0ea5e9_0deg_180deg,#f97316_180deg_360deg)] ${
+                              isRegionTieSpinning ? 'animate-spin' : ''
+                            }`}
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center text-[9px] font-semibold uppercase tracking-[0.4em] text-white/80">
+                            Çark
+                          </div>
+                          <div className="absolute -top-2 left-1/2 h-4 w-4 -translate-x-1/2 rotate-45 bg-white" />
+                        </div>
+                        {regionTieWinner && (
+                          <p className="mt-2 text-xs text-white/80">
+                            {getRegionDisplayName(regionTieWinner) ?? 'Bölge'} seçildi.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    <p className="mt-4 text-center text-[10px] uppercase tracking-[0.4em] text-white/50">
+                      Oylar tamamlanana kadar oyun bekliyor.
+                    </p>
+                  </div>
+                </div>
+              </>
+            )}
 
             {showStartInfo && (
               <div className="absolute inset-0 z-30 flex items-center justify-center bg-[#010a1b]/90 px-6 text-center">
@@ -252,16 +561,22 @@ export default function PlayPage() {
               <div className="w-full max-w-xl rounded-3xl border border-white/30 bg-[#011839]/90 p-5 text-left shadow-2xl">
                 {pendingContestCity && !currentQuestion ? (
                   <div className="space-y-4 text-center text-white">
-                    <div className="text-sm uppercase tracking-[0.4em] text-white/60">Sıradaki Oyuncu</div>
-                    <p className="text-xl font-semibold">
-                      {activePlayer ? activePlayer.name : 'Oyuncu seçiliyor'}
+                    <p className="text-xl font-semibold">{activePlayer?.name ?? ''}</p>
+                    <p className="text-sm text-white/80">
+                      Seçilen Bölge:{' '}
+                      <span className="font-semibold text-white">
+                        {pendingTargetCityName ?? selectedVoteCityName ?? ''}
+                      </span>
                     </p>
                     <button
                       type="button"
                       className="pointer-events-auto inline-flex w-full items-center justify-center rounded-2xl border border-white/30 px-4 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-white/15"
-                      onClick={() => startQuestion(pendingContestCity)}
+                      onClick={() => {
+                        startQuestion(pendingContestCity);
+                        setShowRegionResultModal(false);
+                      }}
                     >
-                      Devam Et
+                      Soruyu Başlat
                     </button>
                   </div>
                 ) : currentQuestion ? (
@@ -292,43 +607,49 @@ export default function PlayPage() {
                     </div>
                   </>
                 ) : (
-                  <p className="text-center text-sm text-white/70">Haritadan bir bölge seçildiğinde soru burada görünecek.</p>
+                  <p className="text-center text-sm text-white/70">
+                    {selectedVoteCityName
+                      ? `${selectedVoteCityName} oylaması tamamlandı. Haritadan bir bölge seçildiğinde soru burada görünecek.`
+                      : 'Haritadan bir bölge seçildiğinde soru burada görünecek.'}
+                  </p>
                 )}
               </div>
             </div>
 
-            <aside className="absolute top-6 right-6 z-40 w-64 space-y-4 rounded-2xl border border-white/20 bg-[#041633]/90 p-4 text-xs text-white/75">
-              <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.35em] text-white/50">
-                <span>{visibleGameLengthMeta?.label} Mod</span>
-                {currentRoundDisplay && <span>Round {currentRoundDisplay}</span>}
-              </div>
-              <ul className="space-y-2">
-                {players.map((player, index) => {
-                  const isActive = index === activePlayerIndex;
-                  return (
-                    <li
-                      key={player.id}
-                      className={`flex items-center justify-between rounded-2xl border px-3 py-2 transition ${
-                        isActive
-                          ? 'border-white/70 bg-white/15 text-white shadow-[0_0_12px_rgba(255,255,255,0.25)]'
-                          : 'border-white/15 bg-white/5 text-white/75'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="h-3 w-3 rounded-full"
-                          style={{ backgroundColor: player.color, boxShadow: isActive ? '0 0 10px currentColor' : 'none' }}
-                        />
-                        <span className="text-sm font-semibold">{player.name}</span>
-                      </div>
-                      <span className="text-[11px] text-white/60">{player.score}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </aside>
+            {!isRegionVoteActive && (
+              <aside className="absolute top-6 right-6 z-40 w-64 space-y-4 rounded-2xl border border-white/20 bg-[#041633]/90 p-4 text-xs text-white/75">
+                <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.35em] text-white/50">
+                  <span>{visibleGameLengthMeta?.label} Mod</span>
+                  {currentRoundDisplay && <span>Round {currentRoundDisplay}</span>}
+                </div>
+                <ul className="space-y-2">
+                  {players.map((player, index) => {
+                    const isActive = index === activePlayerIndex;
+                    return (
+                      <li
+                        key={player.id}
+                        className={`flex items-center justify-between rounded-2xl border px-3 py-2 transition ${
+                          isActive
+                            ? 'border-white/70 bg-white/15 text-white shadow-[0_0_12px_rgba(255,255,255,0.25)]'
+                            : 'border-white/15 bg-white/5 text-white/75'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="h-3 w-3 rounded-full"
+                            style={{ backgroundColor: player.color, boxShadow: isActive ? '0 0 10px currentColor' : 'none' }}
+                          />
+                          <span className="text-sm font-semibold">{player.name}</span>
+                        </div>
+                        <span className="text-[11px] text-white/60">{player.score}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </aside>
+            )}
 
-            {feedback && !currentQuestion && (
+            {feedback && !currentQuestion && !shouldShowRegionVoteOverlay && (
               <div
                 className={`pointer-events-none absolute left-1/2 top-1/2 z-30 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-4 rounded-[42px] border-4 px-16 py-10 text-3xl font-black uppercase tracking-widest shadow-[0_28px_75px_rgba(0,0,0,0.7)] ${
                   lastAnswerCorrect
@@ -344,6 +665,25 @@ export default function PlayPage() {
                   {lastAnswerCorrect ? '✓' : '✕'}
                 </span>
                 <span className="drop-shadow-[0_0_28px_rgba(0,0,0,0.45)]">{feedback}</span>
+              </div>
+            )}
+            {showRegionResultModal && !currentQuestion && (pendingTargetCityName || selectedVoteCityName) && (
+              <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center">
+                <div className="absolute inset-0 bg-[#010a1b]/80" />
+                <div className="relative flex max-w-3xl flex-col items-center gap-5 rounded-[42px] border-4 border-white/30 bg-gradient-to-b from-sky-500/50 via-sky-800/50 to-slate-900/80 px-16 py-14 text-center text-white shadow-[0_40px_100px_rgba(0,0,0,0.85)]">
+                  <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white/20 text-4xl text-white shadow-[0_0_30px_rgba(0,0,0,0.45)]">
+                    ★
+                  </span>
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.6em] text-white/60">Seçilen Bölge</p>
+                    <p className="text-4xl font-black tracking-tight">
+                      {pendingTargetCityName ?? selectedVoteCityName ?? ''}
+                    </p>
+                    <p className="text-xs font-medium uppercase tracking-[0.35em] text-white/70">
+                      Soruyu başlatmak için hazırlan
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -413,42 +753,78 @@ export default function PlayPage() {
               <div className="space-y-6 rounded-3xl border border-white/20 bg-white/5 p-6">
                 <div>
                   <p className="text-xs uppercase tracking-[0.35em] text-white/70">Adım 2</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-white">Oyun uzunluğu</h2>
-                  <p className="text-sm text-white/70">Hangi round sayısıyla oynanacağına karar verin.</p>
+                  <h2 className="mt-2 text-2xl font-semibold text-white">Ders seçimi</h2>
+                  <p className="text-sm text-white/70">Soruların geleceği dersleri işaretleyin. En az bir ders seçin.</p>
                 </div>
-                <div className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {SUBJECT_OPTIONS.map((subject) => {
+                    const isSelected = selectedSubjects.includes(subject.id);
+                    return (
+                      <button
+                        key={subject.id}
+                        type="button"
+                        onClick={() => handleSubjectToggle(subject.id)}
+                        className={`flex items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                          isSelected
+                            ? 'border-white/80 bg-white/20 text-white shadow-lg shadow-white/20'
+                            : 'border-white/25 bg-white/5 text-white/70 hover:border-white/40 hover:bg-white/10'
+                        }`}
+                      >
+                        <span className="font-semibold">{subject.label}</span>
+                        <span
+                          className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] uppercase tracking-[0.3em] ${
+                            isSelected ? 'bg-white text-[#041633]' : 'border border-white/40 text-white/50'
+                          }`}
+                        >
+                          {isSelected ? '✓' : '+'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="rounded-2xl border border-white/20 bg-[#03142d]/60 p-4 text-sm text-white/80">
+                  <p>Seçtiğiniz dersler oyunun ilk round’larında ağırlıklı olarak sorulacak.</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-6 rounded-3xl border border-white/20 bg-white/5 p-5 text-white">
+              <div className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-[0.35em] text-white/70">
+                <span>Round seçimi</span>
+                <div className="flex flex-wrap gap-2">
                   {GAME_LENGTH_OPTIONS.map((option) => (
                     <button
                       key={option.id}
                       type="button"
+                      disabled={isSetupComplete}
                       onClick={() => setSelectedGameLength(option.id)}
-                      className={`flex w-full items-center justify-between rounded-2xl border px-4 py-4 text-left transition ${
+                      className={`rounded-2xl px-5 py-2 text-sm font-semibold tracking-[0.2em] transition ${
                         option.id === selectedGameLength
-                          ? 'border-white/70 bg-white/20 text-white'
-                          : 'border-white/20 bg-white/5 text-white/70 hover:border-white/40 hover:bg-white/10'
-                      }`}
+                          ? 'bg-white text-[#041633]'
+                          : 'border border-white/40 text-white/70 hover:border-white/70 hover:text-white'
+                      } ${isSetupComplete ? 'opacity-60 cursor-not-allowed' : ''}`}
                     >
-                      <span>
-                        <span className="text-lg font-semibold">{option.label}</span>
-                        <span className="block text-xs uppercase tracking-[0.3em] text-white/60">{option.description}</span>
-                      </span>
-                      <span className="text-sm text-white/60">{option.rounds} soru</span>
+                      <span>{option.label}</span>
+                      <span className="ml-2 text-xs opacity-70">({option.rounds})</span>
                     </button>
                   ))}
                 </div>
-                <div className="rounded-2xl border border-white/20 bg-[#03142d]/60 p-4 text-sm text-white/80">
-                  <p>Her round sonrası elenme kuralı seçtiğiniz oyun uzunluğuna göre otomatik işler.</p>
-                </div>
               </div>
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-white/20 bg-white/5 p-5">
-              <div className="text-sm text-white/80">
-                Oyuncu sayısı: {REQUIRED_PLAYER_COUNT} - Seçilen oyun uzunluğu: {setupGameLengthMeta?.label}
+              <div className="flex flex-1 flex-col gap-1 text-center text-sm text-white/80">
+                <span>Oyuncu sayısı: {REQUIRED_PLAYER_COUNT}</span>
+                <span>
+                  Seçilen dersler: {selectedSubjectLabels.length ? selectedSubjectLabels.join(', ') : 'Henüz seçilmedi'}
+                </span>
+                <span className="text-xs text-white/60">
+                  Round sayısı:{' '}
+                  {GAME_LENGTH_OPTIONS.find((option) => option.id === selectedGameLength)?.rounds ??
+                    setupGameLengthMeta?.rounds ??
+                    '--'}
+                </span>
               </div>
               <button
                 type="button"
                 onClick={handleBeginGame}
-                disabled={!allPlayerNamesReady}
+                disabled={!canStartGame}
                 className="rounded-2xl bg-white/90 px-6 py-3 text-sm font-semibold text-[#052049] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Oyuna Başla
