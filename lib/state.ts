@@ -2,6 +2,15 @@ import { create } from 'zustand';
 import type { CityState } from '@/types/realtime';
 import { CITY_PRESETS, QUESTION_PRESETS, TEAM_PRESETS } from './fixtures';
 
+export type LocalQuestion = (typeof QUESTION_PRESETS)[number] & { id: string; subjectIds?: string[] };
+
+export function createQuestionPool(presets = QUESTION_PRESETS): LocalQuestion[] {
+  return presets.map((question, index) => ({
+    ...question,
+    id: typeof (question as { id?: string }).id === 'string' ? (question as { id: string }).id : `Q${index + 1}`,
+  }));
+}
+
 export type GameLengthId = 'short' | 'normal' | 'long';
 
 export const MAX_PLAYERS = 4;
@@ -48,6 +57,7 @@ type GameStore = {
   setPendingContestCity: (cityCode?: string) => void;
   initializeGame: (players: LocalPlayer[], gameLength: GameLengthId, roundsTarget: number) => void;
   reset: () => void;
+  setQuestionBank: (questions: LocalQuestion[]) => void;
 };
 
 const DEFAULT_PLAYERS: LocalPlayer[] = TEAM_PRESETS.slice(0, 2).map((team, index) => ({
@@ -68,10 +78,7 @@ const DEFAULT_CITIES: CityState[] = CITY_PRESETS.map((city) => ({
 
 type LocalQuestion = (typeof QUESTION_PRESETS)[number] & { id: string };
 
-const QUESTION_POOL: LocalQuestion[] = QUESTION_PRESETS.map((question, index) => ({
-  ...question,
-  id: `Q${index + 1}`,
-}));
+const QUESTION_POOL: LocalQuestion[] = createQuestionPool();
 
 const ROUND_PLAYER_SCHEDULE: Record<GameLengthId, number[]> = {
   short: [4, 3, 2],
@@ -387,6 +394,21 @@ export const useGameStore = create<GameStore>((set) => ({
       contestCityCode: undefined,
       pendingContestCityCode: undefined,
     })),
+
+  setQuestionBank: (questions) =>
+    set((state) => {
+      if (!questions.length) {
+        return state;
+      }
+      return {
+        questions,
+        askedQuestionIds: [],
+        currentQuestion: undefined,
+        pendingCityCode: undefined,
+        contestCityCode: undefined,
+        pendingContestCityCode: undefined,
+      };
+    }),
 }));
 
 function countCitiesByOwner(cities: CityState[]) {

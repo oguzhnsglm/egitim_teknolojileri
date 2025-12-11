@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import TurkeyMap from '@/components/TurkeyMap';
-import { useGameStore, type GameLengthId } from '@/lib/state';
+import { useGameStore, type GameLengthId, createQuestionPool, type LocalQuestion } from '@/lib/state';
 import { TEAM_PRESETS } from '@/lib/fixtures';
 import { PROVINCE_TO_REGION, REGION_BY_CODE, type RegionCode } from '@/lib/regions';
 
@@ -58,6 +58,7 @@ export default function PlayPage() {
   const answerQuestion = useGameStore((state) => state.answerQuestion);
   const initializeGame = useGameStore((state) => state.initializeGame);
   const loadMapCities = useGameStore((state) => state.loadMapCities);
+  const setQuestionBank = useGameStore((state) => state.setQuestionBank);
   const pendingContestCity = useGameStore((state) => state.pendingContestCityCode);
   const setPendingContestCity = useGameStore((state) => state.setPendingContestCity);
 
@@ -85,6 +86,20 @@ export default function PlayPage() {
   const [isRegionTieSpinning, setIsRegionTieSpinning] = useState(false);
   const [regionTieWinner, setRegionTieWinner] = useState<string | null>(null);
   const [showRegionResultModal, setShowRegionResultModal] = useState(false);
+  const fallbackQuestionsRef = useRef<LocalQuestion[]>(createQuestionPool());
+  const [remoteQuestionBank, setRemoteQuestionBank] = useState<LocalQuestion[] | null>(null);
+  const [questionLoadError, setQuestionLoadError] = useState<string | null>(null);
+  const [isQuestionBankLoading, setIsQuestionBankLoading] = useState(true);
+  const [signupForm, setSignupForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    password: '',
+    organization: '',
+  });
+  const [signupStatus, setSignupStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isSignupSubmitting, setIsSignupSubmitting] = useState(false);
+  const [isSignupOpen, setIsSignupOpen] = useState(false);
   const lastModalCityRef = useRef<string | null>(null);
   const shouldShowRegionVoteOverlay = isRegionVoteActive && !pendingContestCity && !contestCityCode && !currentQuestion;
 
@@ -97,6 +112,9 @@ export default function PlayPage() {
   const allPlayerNamesReady = playerNames.every((name) => name.trim().length > 0);
   const selectedSubjectLabels = SUBJECT_OPTIONS.filter((option) => selectedSubjects.includes(option.id)).map((option) => option.label);
   const canStartGame = allPlayerNamesReady && selectedSubjects.length > 0;
+  const isSignupReady = Boolean(
+    signupForm.firstName.trim() && signupForm.lastName.trim() && signupForm.email.trim() && signupForm.password.trim(),
+  );
 
   const lastEliminatedCityName = useMemo(() => {
     if (!lastEliminatedCityCode) return null;
@@ -137,6 +155,19 @@ export default function PlayPage() {
   const pendingTargetCityName = pendingTargetCity?.name ?? getRegionDisplayName(pendingContestCity);
   const selectedVoteCityName = selectedVoteCity?.name ?? getRegionDisplayName(regionVoteResult);
 
+  const getPreparedQuestionBank = useCallback(() => {
+    const available = remoteQuestionBank && remoteQuestionBank.length ? remoteQuestionBank : fallbackQuestionsRef.current;
+    if (!selectedSubjects.length) {
+      return available;
+    }
+    const filter = new Set(selectedSubjects);
+    const filtered = available.filter((question) => {
+      if (!question.subjectIds?.length) return true;
+      return question.subjectIds.some((subject) => filter.has(subject));
+    });
+    return filtered.length ? filtered : available;
+  }, [remoteQuestionBank, selectedSubjects]);
+
   const handlePlayerNameChange = (index: number, value: string) => {
     setPlayerNames((prev) => prev.map((name, idx) => (idx === index ? value : name)));
   };
@@ -149,8 +180,74 @@ export default function PlayPage() {
   const handleSubjectToggle = (subjectId: string) => {
     setSelectedSubjects((prev) => (prev.includes(subjectId) ? prev.filter((id) => id !== subjectId) : [...prev, subjectId]));
   };
+
+  const openSignupForm = () => {
+    setIsSignupOpen(true);
+  };
+
+  const closeSignupForm = () => {
+    setIsSignupOpen(false);
+  };
+
+  const handleSignupInputChange = (field: keyof typeof signupForm, value: string) => {
+    setSignupForm((prev) => ({ ...prev, [field]: value }));
+    setSignupStatus(null);
+  };
+
+
+  const handleSignupSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!isSignupReady) {
+      setSignupStatus({ type: 'error', message: 'L?tfen ad, soyad, Gmail ve ?ifre alanlar?n? doldurun.' });
+      return;
+    }
+    if (!signupForm.email.toLowerCase().endsWith('@gmail.com')) {
+      setSignupStatus({ type: 'error', message: 'Kay?t i?in l?tfen bir Gmail adresi kullan?n.' });
+      return;
+    }
+    if (signupForm.password.length < 8) {
+      setSignupStatus({ type: 'error', message: '?ifre en az 8 karakter olmal?d?r.' });
+      return;
+    }
+    setIsSignupSubmitting(true);
+    try {
+      const response = await fetch('/api/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(signupForm),
+      });
+      const payload = (await response.json()) as { success?: boolean; error?: string };
+      if (!response.ok || !payload?.success) {
+        setSignupStatus({ type: 'error', message: payload?.error ?? 'Kay?t s?ras?nda bir hata olu?tu.' });
+        return;
+      }
+      setSignupStatus({
+        type: 'success',
+        message: 'Kayd?n?z al?nd?! Gmail kutunuzu kontrol etmeyi unutmay?n.',
+      });
+      setSignupForm({
+        firstName: '',
+        lastName: '',
+        email: '',
+        password: '',
+        organization: '',
+      });
+      setTimeout(() => {
+        closeSignupForm();
+        setSignupStatus(null);
+      }, 1500);
+    } catch (error) {
+      console.error('signup error', error);
+      setSignupStatus({ type: 'error', message: 'Kay?t iste?i g?nderilemedi.' });
+    } finally {
+      setIsSignupSubmitting(false);
+    }
+  };
+
   const handleBeginGame = () => {
     if (!allPlayerNamesReady || !selectedSubjects.length) return;
+    const questionBank = getPreparedQuestionBank();
+    setQuestionBank(questionBank);
     const gameLengthMeta = setupGameLengthMeta ?? GAME_LENGTH_OPTIONS.find((option) => option.id === 'normal')!;
     const preparedPlayers = playerNames.map((name, index) => ({
       id: `P${Date.now()}-${index}`,
@@ -231,6 +328,42 @@ export default function PlayPage() {
         console.error('Custom map load failed', error);
       });
   }, [loadMapCities]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadSupabaseQuestions = async () => {
+      setIsQuestionBankLoading(true);
+      try {
+        const response = await fetch('/api/supabase-questions');
+        if (!response.ok) {
+          throw new Error(`Request failed: ${response.status}`);
+        }
+        const payload = await response.json();
+        if (cancelled) return;
+        const questions = Array.isArray(payload.questions) ? (payload.questions as LocalQuestion[]) : [];
+        if (questions.length) {
+          setRemoteQuestionBank(questions);
+          setQuestionLoadError(null);
+        } else {
+          setRemoteQuestionBank(null);
+          setQuestionLoadError(payload.error ?? 'Soru bulunamadi.');
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Supabase question fetch failed', error);
+          setQuestionLoadError('Supabase sorulari yuklenemedi, yerel sorular kullanilacak.');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsQuestionBankLoading(false);
+        }
+      }
+    };
+    loadSupabaseQuestions();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!isSetupComplete) {
@@ -427,7 +560,8 @@ export default function PlayPage() {
   }, [pendingContestCity, regionVoteResult, currentQuestion]);
 
   return (
-    <main className="relative min-h-screen bg-gradient-to-b from-[#031633] via-[#044d81] to-[#0c7ec0] pb-6 text-white">
+    <>
+      <main className="relative min-h-screen bg-gradient-to-b from-[#031633] via-[#044d81] to-[#0c7ec0] pb-6 text-white">
       <div className="pointer-events-none absolute left-6 top-4 z-50">
         <a
           href="/map-selector"
@@ -436,7 +570,18 @@ export default function PlayPage() {
           Haritalarım
         </a>
       </div>
-      <div
+      {!isSetupComplete && (
+        <div className="pointer-events-none absolute right-6 top-4 z-50">
+          <button
+            type="button"
+            onClick={openSignupForm}
+            className="pointer-events-auto rounded-full border border-white/70 bg-white/20 px-4 py-1 text-[10px] font-semibold uppercase tracking-[0.4em] text-white transition hover:bg-white/40"
+          >
+            Kaydolun
+          </button>
+        </div>
+      )}
+            <div
         className={`mx-auto flex w-full flex-col gap-8 px-6 py-4 ${
           isSetupComplete ? 'max-w-[1500px]' : 'max-w-[1100px]'
         }`}
@@ -782,6 +927,15 @@ export default function PlayPage() {
                     );
                   })}
                 </div>
+                {isQuestionBankLoading ? (
+                  <p className="text-xs text-white/70">Supabase soru bankasi yukleniyor...</p>
+                ) : remoteQuestionBank?.length ? (
+                  <p className="text-xs text-emerald-300">
+                    Supabase kaynakli {remoteQuestionBank.length} soru kullanima hazir.
+                  </p>
+                ) : questionLoadError ? (
+                  <p className="text-xs text-amber-300">{questionLoadError}</p>
+                ) : null}
                 <div className="rounded-2xl border border-white/20 bg-[#03142d]/60 p-4 text-sm text-white/80">
                   <p>Seçtiğiniz dersler oyunun ilk round’larında ağırlıklı olarak sorulacak.</p>
                 </div>
@@ -833,6 +987,112 @@ export default function PlayPage() {
           </section>
         )}
       </div>
-    </main>
+      </main>
+      {isSignupOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-8">
+          <div className="absolute inset-0" onClick={closeSignupForm} aria-hidden="true" />
+          <div className="relative z-10 w-full max-w-3xl space-y-6 rounded-[32px] border border-white/20 bg-gradient-to-b from-slate-900/90 to-slate-800/80 p-8 text-white shadow-[0_40px_120px_rgba(0,0,0,0.85)]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.35em] text-white/60">Adım 3</p>
+                <h2 className="mt-2 text-3xl font-semibold">Kaydol</h2>
+                <p className="text-sm text-white/70">
+                  Gmail adresinizi paylaşarak Anadolu Hakimiyeti güncellemelerinden haberdar olun.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeSignupForm}
+                className="rounded-full border border-white/40 bg-white/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.4em] text-white transition hover:bg-white/20"
+              >
+                Kapat
+              </button>
+            </div>
+            <form className="space-y-5" onSubmit={handleSignupSubmit}>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="text-xs font-semibold uppercase tracking-[0.35em] text-white/60">
+                  Ad
+                  <input
+                    value={signupForm.firstName}
+                    onChange={(event) => handleSignupInputChange('firstName', event.target.value)}
+                    placeholder="Adınız"
+                    className="mt-2 w-full rounded-xl border border-white/30 bg-white/10 px-4 py-2 text-sm text-white placeholder-white/40 outline-none transition focus:border-white/80"
+                  />
+                </label>
+                <label className="text-xs font-semibold uppercase tracking-[0.35em] text-white/60">
+                  Soyad
+                  <input
+                    value={signupForm.lastName}
+                    onChange={(event) => handleSignupInputChange('lastName', event.target.value)}
+                    placeholder="Soyadınız"
+                    className="mt-2 w-full rounded-xl border border-white/30 bg-white/10 px-4 py-2 text-sm text-white placeholder-white/40 outline-none transition focus:border-white/80"
+                  />
+                </label>
+              </div>
+              <label className="block text-xs font-semibold uppercase tracking-[0.35em] text-white/60">
+                Gmail adresi
+                <input
+                  type="email"
+                  value={signupForm.email}
+                  onChange={(event) => handleSignupInputChange('email', event.target.value)}
+                  placeholder="ornek@gmail.com"
+                  className="mt-2 w-full rounded-xl border border-white/30 bg-white/10 px-4 py-2 text-sm text-white placeholder-white/40 outline-none transition focus:border-white/80"
+                />
+                <span className="mt-1 block text-[10px] uppercase tracking-[0.35em] text-white/50">Gmail zorunludur</span>
+              </label>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="text-xs font-semibold uppercase tracking-[0.35em] text-white/60">
+                  Şifre
+                  <input
+                    type="password"
+                    value={signupForm.password}
+                    onChange={(event) => handleSignupInputChange('password', event.target.value)}
+                    placeholder="En az 8 karakter"
+                    className="mt-2 w-full rounded-xl border border-white/30 bg-white/10 px-4 py-2 text-sm text-white placeholder-white/40 outline-none transition focus:border-white/80"
+                  />
+                </label>
+                <label className="text-xs font-semibold uppercase tracking-[0.35em] text-white/60">
+                  Okul / Kurum (opsiyonel)
+                  <input
+                    value={signupForm.organization}
+                    onChange={(event) => handleSignupInputChange('organization', event.target.value)}
+                    placeholder="Okulunuz veya kulübünüz..."
+                    className="mt-2 w-full rounded-xl border border-white/30 bg-white/10 px-4 py-2 text-sm text-white placeholder-white/40 outline-none transition focus:border-white/80"
+                  />
+                </label>
+              </div>
+              {signupStatus && (
+                <p
+                  className={`rounded-2xl border px-4 py-3 text-sm ${
+                    signupStatus.type === 'success'
+                      ? 'border-emerald-400/60 bg-emerald-600/15 text-emerald-50'
+                      : 'border-rose-400/60 bg-rose-600/10 text-rose-100'
+                  }`}
+                >
+                  {signupStatus.message}
+                </p>
+              )}
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={closeSignupForm}
+                  className="rounded-2xl border border-white/30 px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-white transition hover:bg-white/10"
+                >
+                  Vazgeç
+                </button>
+                <button
+                  type="submit"
+                  disabled={!isSignupReady || isSignupSubmitting}
+                  className="rounded-2xl bg-white/90 px-6 py-3 text-sm font-semibold text-[#052049] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isSignupSubmitting ? 'Kaydınız gönderiliyor...' : 'Kaydol'}
+                </button>
+              </div>
+              <p className="text-center text-[11px] uppercase tracking-[0.35em] text-white/50">Bilgileriniz gizli tutulur.</p>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
