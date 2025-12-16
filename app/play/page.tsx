@@ -86,6 +86,7 @@ export default function PlayPage() {
   const [isRegionTieSpinning, setIsRegionTieSpinning] = useState(false);
   const [regionTieWinner, setRegionTieWinner] = useState<string | null>(null);
   const [showRegionResultModal, setShowRegionResultModal] = useState(false);
+  const [regionSelectNotice, setRegionSelectNotice] = useState<string | null>(null);
   const fallbackQuestionsRef = useRef<LocalQuestion[]>(createQuestionPool());
   const [remoteQuestionBank, setRemoteQuestionBank] = useState<LocalQuestion[] | null>(null);
   const [questionLoadError, setQuestionLoadError] = useState<string | null>(null);
@@ -101,6 +102,7 @@ export default function PlayPage() {
   const [isSignupSubmitting, setIsSignupSubmitting] = useState(false);
   const [isSignupOpen, setIsSignupOpen] = useState(false);
   const lastModalCityRef = useRef<string | null>(null);
+  const regionNoticeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shouldShowRegionVoteOverlay = isRegionVoteActive && !pendingContestCity && !contestCityCode && !currentQuestion;
 
   const setupGameLengthMeta = GAME_LENGTH_OPTIONS.find((option) =>
@@ -154,6 +156,26 @@ export default function PlayPage() {
   const targetCityName = targetCity?.name ?? getRegionDisplayName(contestCityCode);
   const pendingTargetCityName = pendingTargetCity?.name ?? getRegionDisplayName(pendingContestCity);
   const selectedVoteCityName = selectedVoteCity?.name ?? getRegionDisplayName(regionVoteResult);
+  const activeRegionVoter = useMemo(
+    () => players.find((player) => player.id === activeRegionVoterId) ?? null,
+    [activeRegionVoterId, players],
+  );
+  const activeMapRegionCode = contestCityCode ?? pendingContestCity ?? lastSelectedCityCode;
+
+  const showRegionNotice = useCallback(
+    (regionCode: string) => {
+      const regionName = getRegionDisplayName(regionCode) ?? 'Bölge';
+      setRegionSelectNotice(`${regionName} seçildi`);
+      if (regionNoticeTimeoutRef.current) {
+        clearTimeout(regionNoticeTimeoutRef.current);
+      }
+      regionNoticeTimeoutRef.current = setTimeout(() => {
+        setRegionSelectNotice(null);
+        regionNoticeTimeoutRef.current = null;
+      }, 2000);
+    },
+    [getRegionDisplayName],
+  );
 
   const getPreparedQuestionBank = useCallback(() => {
     const available = remoteQuestionBank && remoteQuestionBank.length ? remoteQuestionBank : fallbackQuestionsRef.current;
@@ -412,6 +434,9 @@ export default function PlayPage() {
       if (regionTieResolveTimeoutRef.current) {
         clearTimeout(regionTieResolveTimeoutRef.current);
       }
+      if (regionNoticeTimeoutRef.current) {
+        clearTimeout(regionNoticeTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -469,6 +494,7 @@ export default function PlayPage() {
     if (contestCityCode) return;
     if (pendingContestCity) return;
     setPendingContestCity(cityCode);
+    showRegionNotice(cityCode);
     setFeedback(null);
     setShowRegionResultModal(true);
   };
@@ -483,8 +509,9 @@ export default function PlayPage() {
       setPendingContestCity(winningCityCode);
       setFeedback(null);
       setShowRegionResultModal(true);
+      showRegionNotice(winningCityCode);
     },
-    [setPendingContestCity, setFeedback],
+    [setPendingContestCity, setFeedback, showRegionNotice],
   );
 
   useEffect(() => {
@@ -605,7 +632,7 @@ export default function PlayPage() {
               <TurkeyMap
                 cities={cities}
                 onSelect={handleSelectCity}
-                activeCityCode={lastSelectedCityCode}
+                activeCityCode={activeMapRegionCode}
                 disabled={!players.length || Boolean(currentQuestion) || showStartInfo || !shouldShowRegionVoteOverlay}
                 provinceToRegionMap={provinceMap}
               />
@@ -619,43 +646,46 @@ export default function PlayPage() {
                     ? `Seçilen Bölge: ${selectedVoteCityName}`
                     : 'Henüz bir bölge seçilmedi'}
             </div>
+            {regionSelectNotice && (
+              <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center">
+                <div className="flex items-center gap-3 rounded-3xl border border-white/30 bg-[#0b1a3a]/95 px-6 py-3 text-center text-sm font-bold uppercase tracking-[0.3em] text-white shadow-[0_25px_80px_rgba(0,0,0,0.55)]">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-lg">★</span>
+                  <span>{regionSelectNotice}</span>
+                </div>
+              </div>
+            )}
             {shouldShowRegionVoteOverlay && (
               <>
-                <div className="pointer-events-none absolute inset-0 z-30 bg-[#010a1b]/60" />
-                <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center px-4">
-                  <div className="pointer-events-auto w-full max-w-md rounded-3xl border border-white/20 bg-[#050d1f]/70 px-6 py-6 text-white shadow-[0_30px_90px_rgba(0,0,0,0.45)]">
-                    <div className="text-center text-[11px] uppercase tracking-[0.4em] text-white/60">Bölge Seçimi</div>
-                    <h3 className="mt-3 text-2xl font-semibold text-white">Bölge Seçin</h3>
-                    <p className="mt-2 text-xs text-white/70">
-                      Haritada bir bölgeye tıklayarak oyuncular oy veriyor. Her oy sonrası sıra otomatik ilerler.
-                    </p>
-                    <div className="mt-3 text-center text-[10px] uppercase tracking-[0.4em] text-white/55">
-                      {regionVoteSummary.votesPlaced}/{players.length} oy verildi
+                <div className="pointer-events-none absolute inset-0 z-30" />
+                <div className="pointer-events-none absolute inset-x-0 bottom-4 z-40 flex justify-center px-4">
+                  <div className="pointer-events-auto flex w-full max-w-4xl flex-col gap-3 rounded-3xl border border-white/20 bg-[#0c264a]/90 px-5 py-4 text-white shadow-[0_30px_90px_rgba(0,0,0,0.35)]">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div className="flex items-center gap-3">
+                        <span
+                          className="h-3.5 w-3.5 rounded-full border border-white/30 shadow-[0_0_12px_rgba(0,0,0,0.35)]"
+                          style={{ backgroundColor: activeRegionVoter?.color ?? '#fff' }}
+                        />
+                        <div className="space-y-1">
+                          <p className="text-[11px] uppercase tracking-[0.4em] text-white/60">Bölge Seçimi</p>
+                          <p className="text-lg font-semibold leading-tight">
+                            {activeRegionVoter
+                              ? `${activeRegionVoter.name} seçim yapıyor`
+                              : 'Sıradaki oyuncu seçim yapıyor'}
+                          </p>
+                          <p className="text-xs text-white/70">Haritadan bir bölgeye tıklayarak oy ver.</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-white/70">
+                        <span className="rounded-full border border-white/30 px-3 py-1 font-semibold uppercase tracking-[0.3em] text-white/80">
+                          {regionVoteSummary.votesPlaced}/{players.length} oy verildi
+                        </span>
+                        <span className="hidden rounded-full border border-white/20 bg-white/5 px-3 py-1 font-semibold uppercase tracking-[0.25em] text-white/70 sm:inline-flex">
+                          Haritadan seçmeye devam edin
+                        </span>
+                      </div>
                     </div>
-                    <ul className="mt-4 space-y-2 text-sm text-white/80">
-                      {players.map((player) => {
-                        const vote = playerRegionVotes[player.id];
-                        const isActive = activeRegionVoterId === player.id;
-                        return (
-                          <li
-                            key={player.id}
-                            className={`flex items-center justify-between rounded-2xl border px-3 py-2 ${
-                              isActive ? 'border-white/60 bg-white/10' : 'border-white/15 bg-white/5'
-                            }`}
-                          >
-                            <span className="flex items-center gap-2">
-                              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: player.color }} />
-                              {player.name}
-                            </span>
-                            <span className="text-[11px] uppercase tracking-[0.3em] text-white/60">
-                              {vote ? getRegionDisplayName(vote) ?? 'Seçildi' : 'Bekleniyor'}
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
                     {regionVoteTieCandidates.length > 1 && (
-                      <div className="mt-4 rounded-2xl border border-white/20 bg-black/20 p-3 text-center text-xs">
+                      <div className="rounded-2xl border border-white/20 bg-black/20 p-3 text-center text-xs">
                         <p>Oylar eşit! Çark karar veriyor.</p>
                         <div className="relative mx-auto mt-3 h-20 w-20">
                           <div
@@ -675,7 +705,7 @@ export default function PlayPage() {
                         )}
                       </div>
                     )}
-                    <p className="mt-4 text-center text-[10px] uppercase tracking-[0.4em] text-white/50">
+                    <p className="text-[10px] uppercase tracking-[0.4em] text-white/50">
                       Oylar tamamlanana kadar oyun bekliyor.
                     </p>
                   </div>
@@ -702,64 +732,66 @@ export default function PlayPage() {
               </div>
             )}
 
-            <div className="pointer-events-none absolute inset-x-0 bottom-6 z-30 flex justify-center px-6">
-              <div className="w-full max-w-xl rounded-3xl border border-white/30 bg-[#011839]/90 p-5 text-left shadow-2xl">
-                {pendingContestCity && !currentQuestion ? (
-                  <div className="space-y-4 text-center text-white">
-                    <p className="text-xl font-semibold">{activePlayer?.name ?? ''}</p>
-                    <p className="text-sm text-white/80">
-                      Seçilen Bölge:{' '}
-                      <span className="font-semibold text-white">
-                        {pendingTargetCityName ?? selectedVoteCityName ?? ''}
-                      </span>
-                    </p>
-                    <button
-                      type="button"
-                      className="pointer-events-auto inline-flex w-full items-center justify-center rounded-2xl border border-white/30 px-4 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-white/15"
-                      onClick={() => {
-                        startQuestion(pendingContestCity);
-                        setShowRegionResultModal(false);
-                      }}
-                    >
-                      Soruyu Başlat
-                    </button>
-                  </div>
-                ) : currentQuestion ? (
-                  <>
-                    <div className="flex items-center justify-between text-white/80">
-                      <p className="text-[11px] uppercase tracking-[0.4em] text-white/60">
-                        {activePlayer ? `${activePlayer.name} için soru` : 'Soru'}
+            {!shouldShowRegionVoteOverlay && (
+              <div className="pointer-events-auto absolute inset-x-0 bottom-6 z-30 flex justify-center px-6">
+                <div className="w-full max-w-xl rounded-3xl border border-white/30 bg-[#011839]/90 p-5 text-left shadow-2xl">
+                  {pendingContestCity && !currentQuestion ? (
+                    <div className="space-y-4 text-center text-white">
+                      <p className="text-xl font-semibold">{activePlayer?.name ?? ''}</p>
+                      <p className="text-sm text-white/80">
+                        Seçilen Bölge:{' '}
+                        <span className="font-semibold text-white">
+                          {pendingTargetCityName ?? selectedVoteCityName ?? ''}
+                        </span>
                       </p>
-                      <span className="rounded-full border border-white/30 px-3 py-1 text-xs font-semibold">
-                        {questionTimer ?? '--'} sn
-                      </span>
+                      <button
+                        type="button"
+                        className="pointer-events-auto inline-flex w-full items-center justify-center rounded-2xl border border-white/30 px-4 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-white/15"
+                        onClick={() => {
+                          startQuestion(pendingContestCity);
+                          setShowRegionResultModal(false);
+                        }}
+                      >
+                        Soruyu Başlat
+                      </button>
                     </div>
-                    <p className="mt-2 text-lg font-semibold text-white">{currentQuestion.prompt}</p>
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      {currentQuestion.choices.map((choice, index) => (
-                        <button
-                          key={choice}
-                          type="button"
-                          onClick={() => handleAnswer(index)}
-                          className="pointer-events-auto flex items-center gap-3 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-left text-sm text-white transition hover:bg-white/20"
-                        >
-                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/15 text-xs font-semibold text-white/85">
-                            {index + 1}
-                          </span>
-                          {choice}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <p className="text-center text-sm text-white/70">
-                    {selectedVoteCityName
-                      ? `${selectedVoteCityName} oylaması tamamlandı. Haritadan bir bölge seçildiğinde soru burada görünecek.`
-                      : 'Haritadan bir bölge seçildiğinde soru burada görünecek.'}
-                  </p>
-                )}
+                  ) : currentQuestion ? (
+                    <>
+                      <div className="flex items-center justify-between text-white/80">
+                        <p className="text-[11px] uppercase tracking-[0.4em] text-white/60">
+                          {activePlayer ? `${activePlayer.name} için soru` : 'Soru'}
+                        </p>
+                        <span className="rounded-full border border-white/30 px-3 py-1 text-xs font-semibold">
+                          {questionTimer ?? '--'} sn
+                        </span>
+                      </div>
+                      <p className="mt-2 text-lg font-semibold text-white">{currentQuestion.prompt}</p>
+                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                        {currentQuestion.choices.map((choice, index) => (
+                          <button
+                            key={choice}
+                            type="button"
+                            onClick={() => handleAnswer(index)}
+                            className="pointer-events-auto flex items-center gap-3 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-left text-sm text-white transition hover:bg-white/20"
+                          >
+                            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/15 text-xs font-semibold text-white/85">
+                              {index + 1}
+                            </span>
+                            {choice}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-center text-sm text-white/70">
+                      {selectedVoteCityName
+                        ? `${selectedVoteCityName} oylaması tamamlandı. Haritadan bir bölge seçildiğinde soru burada görünecek.`
+                        : 'Haritadan bir bölge seçildiğinde soru burada görünecek.'}
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             {!isRegionVoteActive && (
               <aside className="absolute top-6 right-6 z-40 w-64 space-y-4 rounded-2xl border border-white/20 bg-[#041633]/90 p-4 text-xs text-white/75">
@@ -817,17 +849,29 @@ export default function PlayPage() {
                 <div className="absolute inset-0 bg-[#010a1b]/80" />
                 <div className="relative flex max-w-3xl flex-col items-center gap-5 rounded-[42px] border-4 border-white/30 bg-gradient-to-b from-sky-500/50 via-sky-800/50 to-slate-900/80 px-16 py-14 text-center text-white shadow-[0_40px_100px_rgba(0,0,0,0.85)]">
                   <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white/20 text-4xl text-white shadow-[0_0_30px_rgba(0,0,0,0.45)]">
-                    ★
+                    ?
                   </span>
                   <div className="space-y-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.6em] text-white/60">Seçilen Bölge</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.6em] text-white/60">Se?ilen B?lge</p>
                     <p className="text-4xl font-black tracking-tight">
                       {pendingTargetCityName ?? selectedVoteCityName ?? ''}
                     </p>
                     <p className="text-xs font-medium uppercase tracking-[0.35em] text-white/70">
-                      Soruyu başlatmak için hazırlan
+                      Soruyu ba?latmak i?in haz?rlan
                     </p>
                   </div>
+                  {pendingContestCity && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        startQuestion(pendingContestCity);
+                        setShowRegionResultModal(false);
+                      }}
+                      className="pointer-events-auto inline-flex items-center justify-center rounded-2xl border border-white/30 bg-white/90 px-6 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-[#052049] transition hover:bg-white"
+                    >
+                      Soruyu Ba?lat
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -930,9 +974,7 @@ export default function PlayPage() {
                 {isQuestionBankLoading ? (
                   <p className="text-xs text-white/70">Supabase soru bankasi yukleniyor...</p>
                 ) : remoteQuestionBank?.length ? (
-                  <p className="text-xs text-emerald-300">
-                    Supabase kaynakli {remoteQuestionBank.length} soru kullanima hazir.
-                  </p>
+                  null
                 ) : questionLoadError ? (
                   <p className="text-xs text-amber-300">{questionLoadError}</p>
                 ) : null}

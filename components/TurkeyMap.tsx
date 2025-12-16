@@ -13,11 +13,11 @@ interface TurkeyMapProps {
 }
 
 const SELECTOR = '#turkey-provinces path[id^="TR-"]';
-const DEFAULT_FILL = '#000000';
-const BASE_STROKE = '#0f172a';
-const ACTIVE_STROKE = '#facc15';
-const HOVER_STROKE = '#60a5fa';
-const HOVER_FILTER = 'drop-shadow(0 0 8px rgba(96,165,250,0.55))';
+const DEFAULT_FILL = '#2f75c5';
+const BASE_STROKE = '#5e90d6';
+const ACTIVE_STROKE = '#123a73';
+const HOVER_STROKE = '#8bb9f1';
+const HOVER_FILTER = 'drop-shadow(0 0 12px rgba(154,200,255,0.65))';
 
 export function TurkeyMap({ cities, onSelect, disabled, activeCityCode, provinceToRegionMap = PROVINCE_TO_REGION }: TurkeyMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -51,8 +51,13 @@ export function TurkeyMap({ cities, onSelect, disabled, activeCityCode, province
         paths.forEach((path) => {
           path.style.fill = ownerFill ? fillColor : DEFAULT_FILL;
           path.style.stroke = isActive ? ACTIVE_STROKE : strokeColor;
-          path.style.strokeWidth = isActive ? '2.4' : ownerFill ? '1.6' : '1.1';
-          path.style.filter = isActive ? 'brightness(1.05)' : 'none';
+          path.style.strokeWidth = isActive ? '2.6' : ownerFill ? '1.6' : '1.45';
+          path.style.strokeLinecap = 'round';
+          path.style.strokeLinejoin = 'round';
+          path.style.vectorEffect = 'non-scaling-stroke';
+          path.style.filter = isActive
+            ? 'brightness(1.22) saturate(1.1) drop-shadow(0 0 6px rgba(18,58,115,0.65))'
+            : 'brightness(1.25) saturate(1.08)';
           path.style.transform = isActive ? 'translateY(-1px)' : 'translateY(0)';
         });
       });
@@ -150,6 +155,9 @@ export function TurkeyMap({ cities, onSelect, disabled, activeCityCode, province
         }
         path.style.stroke = HOVER_STROKE;
         path.style.strokeWidth = '1.8';
+        path.style.strokeLinecap = 'round';
+        path.style.strokeLinejoin = 'round';
+        path.style.vectorEffect = 'non-scaling-stroke';
         path.style.filter = HOVER_FILTER;
         path.style.transform = 'translateY(-1px)';
       });
@@ -208,7 +216,7 @@ export function TurkeyMap({ cities, onSelect, disabled, activeCityCode, province
   return (
     <div
       ref={containerRef}
-      className="mx-auto aspect-[5/3] w-full max-w-[1600px] overflow-hidden rounded-3xl border border-slate-800 shadow-2xl"
+      className="mx-auto aspect-[5/3] w-full max-w-[1600px] overflow-hidden rounded-3xl border border-slate-800 bg-[#f5f1e6] shadow-2xl"
       aria-live="polite"
     />
   );

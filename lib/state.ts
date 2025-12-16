@@ -191,6 +191,8 @@ export const useGameStore = create<GameStore>((set) => ({
       const player = state.players[state.activePlayerIndex];
       let cities = state.cities;
       let players = state.players;
+      let contestCityCode = state.contestCityCode;
+      let lastCorrectPlayer: LocalPlayer | null = null;
       wasCorrect = question.correctIndex === choiceIndex;
       if (player) {
         players = state.players.map((candidate) =>
@@ -203,6 +205,7 @@ export const useGameStore = create<GameStore>((set) => ({
         players = players.map((candidate) =>
           candidate.id === player.id ? { ...candidate, score: candidate.score + 10 } : candidate,
         );
+        lastCorrectPlayer = player;
       }
       const askedQuestionIds = state.askedQuestionIds.includes(question.id)
         ? state.askedQuestionIds
@@ -213,10 +216,10 @@ export const useGameStore = create<GameStore>((set) => ({
       let roundTurns = state.roundTurns + 1;
       let roundsPlayed = state.roundsPlayed;
       let roundPlayerCount = currentRoundTarget;
+      const regionComplete = currentRoundTarget > 0 && roundTurns >= currentRoundTarget;
       let lastEliminatedPlayerName = state.lastEliminatedPlayerName;
       let lastEliminatedCityCode = state.lastEliminatedCityCode;
       let activeIndex = nextActiveIndex;
-      let contestCityCode = state.contestCityCode;
       let pendingCityCode = state.pendingCityCode;
       let pendingContestCityCode = state.pendingContestCityCode;
       let eliminatedPlayers = state.eliminatedPlayers;
@@ -250,20 +253,6 @@ export const useGameStore = create<GameStore>((set) => ({
       }
 
       if (roundsPlayed >= state.gameRoundTarget) {
-        if (contestCityCode && wasCorrect) {
-          const awardingPlayer = players.find((candidate) => candidate.id === player?.id) ?? player;
-          if (awardingPlayer) {
-            cities = cities.map((city) =>
-              city.code === contestCityCode
-                ? {
-                    ...city,
-                    ownerTeamId: awardingPlayer.id,
-                    ownerColor: awardingPlayer.color,
-                  }
-                : city,
-            );
-          }
-        }
         const combinedPlayers = [...players, ...eliminatedPlayers];
         const orderedSource = state.initialPlayers.length ? state.initialPlayers : combinedPlayers;
         players = orderedSource.map((initial) => combinedPlayers.find((player) => player.id === initial.id) ?? initial);
@@ -279,13 +268,33 @@ export const useGameStore = create<GameStore>((set) => ({
         pendingContestCityCode = contestCityCode ?? pendingContestCityCode;
       }
 
+      if (regionComplete) {
+        if (contestCityCode && lastCorrectPlayer) {
+          cities = cities.map((city) =>
+            city.code === contestCityCode
+              ? { ...city, ownerTeamId: lastCorrectPlayer!.id, ownerColor: lastCorrectPlayer!.color }
+              : city,
+          );
+        }
+        contestCityCode = undefined;
+        pendingContestCityCode = undefined;
+        pendingCityCode = undefined;
+      }
+
+      const nextLastSelectedCityCode =
+        regionComplete && state.pendingCityCode
+          ? state.pendingCityCode
+          : wasCorrect
+            ? state.pendingCityCode
+            : state.lastSelectedCityCode;
+
       return {
         players,
         cities,
         askedQuestionIds,
         currentQuestion: undefined,
         pendingCityCode,
-        lastSelectedCityCode: wasCorrect ? state.pendingCityCode : state.lastSelectedCityCode,
+        lastSelectedCityCode: nextLastSelectedCityCode,
         lastAnswerCorrect: wasCorrect,
         activePlayerIndex: activeIndex,
         roundTurns,
